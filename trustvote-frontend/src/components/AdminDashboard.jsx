@@ -79,7 +79,6 @@ function AdminDashboard() {
     return <div style={{ padding: "20px" }}>Please connect your wallet from the Home page.</div>;
   }
 
-  console.log(isAdmin)
   if (!isAdmin) {
     return <div style={{ padding: "20px" }}>Access denied. You are not an admin.</div>;
   }

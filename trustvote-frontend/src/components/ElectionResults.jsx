@@ -17,11 +17,11 @@ function ElectionResults() {
   const getElectionData = async () => {
     if (!votingContract || !electionId) return;
     try {
-      // This call assumes your contract has a getElection() function.
-      const result = await votingContract.getElection(electionId);
+      // This call assumes your contract has a getElectionDetails() function.
+      const result = await votingContract.getElectionDetails(electionId);
       const name = result[0];
       const active = result[1];
-      const candidateCount = result[2].toNumber();
+      const candidateCount = Number(result[2]);
 
       // Fetch candidates via getCandidates()
       const candidateList = await votingContract.getCandidates(electionId);
@@ -38,10 +38,10 @@ function ElectionResults() {
     const init = async () => {
       if (window.ethereum) {
         const provider = new BrowserProvider(window.ethereum);
+        const signer = await provider.getSigner();
         const accounts = await provider.listAccounts();
         if (accounts.length) {
           setAccount(accounts[0]);
-          const signer = provider.getSigner();
           const contract = new ethers.Contract(contractAddress, contractABI.abi, signer);
           setVotingContract(contract);
         }

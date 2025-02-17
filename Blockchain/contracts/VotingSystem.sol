@@ -129,4 +129,11 @@ contract VotingSystem is AccessControl {
         }
         return candidates;
     }
+
+    function getElectionDetails(uint256 electionId) external view returns (string memory name, bool active, uint256 candidateCount) {
+    require(electionId > 0 && electionId <= electionCount, "Invalid election id");
+    Election storage election = elections[electionId];
+    return (election.name, election.active, election.candidates.length);
+    }
+
 }
