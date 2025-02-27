@@ -24,9 +24,12 @@ function AdminDashboard() {
 
   // States for Admin management
   const [newAdmin, setNewAdmin] = useState("");
+  const [adminsList, setAdminsList] = useState([]);
 
   // States for Voter management
   const [newVoter, setNewVoter] = useState("");
+  const [votersList, setVotersList] = useState([]);
+
 
   // States for Election management (for updating selected election)
   const [updateElectionName, setUpdateElectionName] = useState("");
@@ -51,9 +54,16 @@ function AdminDashboard() {
           if (accounts.length) {
             setAccount(accounts[0]);
             // Create read-only contract instance using ethersProvider
-            const contractRead = new ethers.Contract(contractAddress, contractABI.abi, ethersProvider);
+            const contractRead = new ethers.Contract(
+              contractAddress,
+              contractABI.abi,
+              ethersProvider
+            );
             // Check if connected account has ADMIN_ROLE
-            const adminStatus = await contractRead.hasRole(ADMIN_ROLE, accounts[0]);
+            const adminStatus = await contractRead.hasRole(
+              ADMIN_ROLE,
+              accounts[0]
+            );
             setIsAdmin(adminStatus);
             // Retrieve private key via provider (as recommended by Web3Auth)
             const pk = await provider.request({ method: "eth_private_key" });
@@ -73,6 +83,7 @@ function AdminDashboard() {
     };
     init();
   }, [provider]);
+
 
   // ----------------- Elections List Functions -----------------
   const handleViewElections = async () => {
@@ -105,8 +116,12 @@ function AdminDashboard() {
     setSelectedElectionId(election.id);
     setSelectedElectionDetails(election);
     // Pre-fill update fields with current details (convert timestamps to datetime-local format)
-    const startDate = new Date(election.startTime * 1000).toISOString().slice(0,16);
-    const endDate = new Date(election.endTime * 1000).toISOString().slice(0,16);
+    const startDate = new Date(election.startTime * 1000)
+      .toISOString()
+      .slice(0, 16);
+    const endDate = new Date(election.endTime * 1000)
+      .toISOString()
+      .slice(0, 16);
     setUpdateElectionName(election.name);
     setUpdateElectionStartTime(startDate);
     setUpdateElectionEndTime(endDate);
@@ -130,6 +145,7 @@ function AdminDashboard() {
     try {
       const Admins = await votingContractRead.viewAdmins();
       setAdminsList(Admins);
+      console.log(adminsList)
       setStatusMessage("Admins fetched successfully");
     } catch (error) {
       console.error(error);
@@ -167,9 +183,16 @@ function AdminDashboard() {
     if (!votingContract || !selectedElectionId) return;
     try {
       // Convert datetime-local strings to Unix timestamps (in seconds)
-      const start = Math.floor(new Date(updateElectionStartTime).getTime() / 1000);
+      const start = Math.floor(
+        new Date(updateElectionStartTime).getTime() / 1000
+      );
       const end = Math.floor(new Date(updateElectionEndTime).getTime() / 1000);
-      const tx = await votingContract.updateElection(selectedElectionId, updateElectionName, start, end);
+      const tx = await votingContract.updateElection(
+        selectedElectionId,
+        updateElectionName,
+        start,
+        end
+      );
       await tx.wait();
       setStatusMessage("Election updated successfully");
       handleViewElections();
@@ -225,7 +248,11 @@ function AdminDashboard() {
     if (!votingContract || !selectedElectionId) return;
     try {
       const officeIdx = Number(officeIndex);
-      const tx = await votingContract.addCandidate(selectedElectionId, officeIdx, candidateName);
+      const tx = await votingContract.addCandidate(
+        selectedElectionId,
+        officeIdx,
+        candidateName
+      );
       await tx.wait();
       setStatusMessage("Candidate added successfully");
     } catch (error) {
@@ -236,35 +263,65 @@ function AdminDashboard() {
 
   // ----------------- Sidebar Component -----------------
   const Sidebar = () => (
-    <div style={{ width: "250px", background: "#f4f4f4", padding: "20px", height: "100vh" }}>
-      <h3 style={{ color: "black"}}>Dashboard</h3>
+    <div
+      style={{
+        width: "250px",
+        background: "#f4f4f4",
+        padding: "20px",
+        height: "100vh",
+      }}
+    >
+      <h3 style={{ color: "black" }}>Dashboard</h3>
       <ul style={{ listStyle: "none", padding: 0 }}>
         <li
-          style={{ marginBottom: "10px", cursor: "pointer", color: currentSection === "dashboard" ? "blue" : "black" }}
-          onClick={() => setCurrentSection("dashboard")}
+          style={{
+            marginBottom: "10px",
+            cursor: "pointer",
+            color: currentSection === "dashboard" ? "blue" : "black",
+          }}
+          onClick={() => {
+            setCurrentSection("dashboard");
+            handleViewElections();
+          }}
         >
           Overview
         </li>
         <li
-          style={{ marginBottom: "10px", cursor: "pointer", color: currentSection === "admin" ? "blue" : "black" }}
+          style={{
+            marginBottom: "10px",
+            cursor: "pointer",
+            color: currentSection === "admin" ? "blue" : "black",
+          }}
           onClick={() => setCurrentSection("admin")}
         >
           Admin Management
         </li>
         <li
-          style={{ marginBottom: "10px", cursor: "pointer", color: currentSection === "voter" ? "blue" : "black" }}
+          style={{
+            marginBottom: "10px",
+            cursor: "pointer",
+            color: currentSection === "voter" ? "blue" : "black",
+          }}
           onClick={() => setCurrentSection("voter")}
         >
           Voter Management
         </li>
         <li
-          style={{ marginBottom: "10px", cursor: "pointer", color: currentSection === "election" ? "blue" : "black" }}
+          style={{
+            marginBottom: "10px",
+            cursor: "pointer",
+            color: currentSection === "election" ? "blue" : "black",
+          }}
           onClick={() => setCurrentSection("election")}
         >
           Elections
         </li>
         <li
-          style={{ marginBottom: "10px", cursor: "pointer", color: currentSection === "officeCandidate" ? "blue" : "black" }}
+          style={{
+            marginBottom: "10px",
+            cursor: "pointer",
+            color: currentSection === "officeCandidate" ? "blue" : "black",
+          }}
           onClick={() => setCurrentSection("officeCandidate")}
         >
           Office & Candidate
@@ -280,8 +337,13 @@ function AdminDashboard() {
         return (
           <div>
             <h2>Overview</h2>
-            <p>Welcome, {account}. You are {isAdmin ? "an admin" : "not an admin"}.</p>
-            <button onClick={handleViewElections}>Refresh Elections List</button>
+            <p>
+              Welcome, {account}. You are{" "}
+              {isAdmin ? "an admin" : "not an admin"}.
+            </p>
+            <button onClick={handleViewElections}>
+              Refresh Elections List
+            </button>
             {electionsList.length > 0 ? (
               <table border="1" cellPadding="8" style={{ marginTop: "10px" }}>
                 <thead>
@@ -300,12 +362,18 @@ function AdminDashboard() {
                     <tr key={election.id}>
                       <td>{election.id}</td>
                       <td>{election.name}</td>
-                      <td>{election.active ? "Yes" : "No"}</td>
-                      <td>{new Date(election.startTime * 1000).toLocaleString()}</td>
-                      <td>{new Date(election.endTime * 1000).toLocaleString()}</td>
+                      <td>{(election.active && (Date.now() / 1000) <= election.endTime) ? "Yes" : "No"}</td>
+                      <td>
+                        {new Date(election.startTime * 1000).toLocaleString()}
+                      </td>
+                      <td>
+                        {new Date(election.endTime * 1000).toLocaleString()}
+                      </td>
                       <td>{election.officeCount}</td>
                       <td>
-                        <button onClick={() => handleSelectElection(election)}>Select</button>
+                        <button onClick={() => handleSelectElection(election)}>
+                          Select
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -321,9 +389,22 @@ function AdminDashboard() {
           <div>
             <h2>Admin Management</h2>
             <button onClick={handleViewAdmins}>Refresh Admin List</button>
-            {/** Here you can also render a list of admins if needed */}
+              {adminsList && adminsList.length > 0 ? (
+                <ul>
+                  {adminsList.map((admin, idx) => (
+                    <li key={idx}>{admin}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p>No admins found.</p>
+              )}
             <h3>Add New Admin</h3>
-            <input type="text" placeholder="New admin address" value={newAdmin} onChange={(e) => setNewAdmin(e.target.value)} />
+            <input
+              type="text"
+              placeholder="New admin address"
+              value={newAdmin}
+              onChange={(e) => setNewAdmin(e.target.value)}
+            />
             <button onClick={handleAddAdmin}>Add Admin</button>
           </div>
         );
@@ -332,9 +413,24 @@ function AdminDashboard() {
           <div>
             <h2>Voter Management</h2>
             <button onClick={handleViewVoters}>Refresh Voter List</button>
-            {/** Render voters list if desired */}
+            {
+              votersList && votersList.length > 0 ? (
+                <ul>
+                  {votersList.map((voter, idx) => (
+                    <li key={idx}>{voter}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p>No voters found.</p>
+              )
+            }
             <h3>Register New Voter</h3>
-            <input type="text" placeholder="Voter address" value={newVoter} onChange={(e) => setNewVoter(e.target.value)} />
+            <input
+              type="text"
+              placeholder="Voter address"
+              value={newVoter}
+              onChange={(e) => setNewVoter(e.target.value)}
+            />
             <button onClick={handleRegisterVoter}>Register Voter</button>
           </div>
         );
@@ -345,28 +441,50 @@ function AdminDashboard() {
             {selectedElectionId ? (
               <div>
                 <p>
-                  Selected Election ID: <strong>{selectedElectionId}</strong> (Name:{" "}
-                  <strong>{selectedElectionDetails?.name}</strong>)
+                  Selected Election ID: <strong>{selectedElectionId}</strong>{" "}
+                  (Name: <strong>{selectedElectionDetails?.name}</strong>)
                 </p>
                 <h3>Update Election</h3>
                 <label>
                   Name:{" "}
-                  <input type="text" value={updateElectionName} onChange={(e) => setUpdateElectionName(e.target.value)} />
+                  <input
+                    type="text"
+                    value={updateElectionName}
+                    onChange={(e) => setUpdateElectionName(e.target.value)}
+                  />
                 </label>
                 <br />
                 <label>
                   Start Time:{" "}
-                  <input type="datetime-local" value={updateElectionStartTime} onChange={(e) => setUpdateElectionStartTime(e.target.value)} />
+                  <input
+                    type="datetime-local"
+                    value={updateElectionStartTime}
+                    onChange={(e) => setUpdateElectionStartTime(e.target.value)}
+                  />
                 </label>
                 <br />
                 <label>
                   End Time:{" "}
-                  <input type="datetime-local" value={updateElectionEndTime} onChange={(e) => setUpdateElectionEndTime(e.target.value)} />
+                  <input
+                    type="datetime-local"
+                    value={updateElectionEndTime}
+                    onChange={(e) => setUpdateElectionEndTime(e.target.value)}
+                  />
                 </label>
                 <br />
                 <button onClick={handleUpdateElection}>Update Election</button>
-                <button onClick={handleEndElection} style={{ marginLeft: "10px" }}>End Election</button>
-                <button onClick={handleDeleteElection} style={{ marginLeft: "10px" }}>Delete Election</button>
+                <button
+                  onClick={handleEndElection}
+                  style={{ marginLeft: "10px" }}
+                >
+                  End Election
+                </button>
+                <button
+                  onClick={handleDeleteElection}
+                  style={{ marginLeft: "10px" }}
+                >
+                  Delete Election
+                </button>
               </div>
             ) : (
               <p>Please select an election from the Overview tab.</p>
@@ -380,18 +498,33 @@ function AdminDashboard() {
             {selectedElectionId ? (
               <div>
                 <p>
-                  Managing election ID: <strong>{selectedElectionId}</strong> (Name:{" "}
-                  <strong>{selectedElectionDetails?.name}</strong>)
+                  Managing election ID: <strong>{selectedElectionId}</strong>{" "}
+                  (Name: <strong>{selectedElectionDetails?.name}</strong>)
                 </p>
                 <div>
                   <h3>Add Office</h3>
-                  <input type="text" placeholder="Office Name" value={officeName} onChange={(e) => setOfficeName(e.target.value)} />
+                  <input
+                    type="text"
+                    placeholder="Office Name"
+                    value={officeName}
+                    onChange={(e) => setOfficeName(e.target.value)}
+                  />
                   <button onClick={handleAddOffice}>Add Office</button>
                 </div>
                 <div style={{ marginTop: "20px" }}>
                   <h3>Add Candidate</h3>
-                  <input type="text" placeholder="Office Index" value={officeIndex} onChange={(e) => setOfficeIndex(e.target.value)} />
-                  <input type="text" placeholder="Candidate Name" value={candidateName} onChange={(e) => setCandidateName(e.target.value)} />
+                  <input
+                    type="text"
+                    placeholder="Office Index"
+                    value={officeIndex}
+                    onChange={(e) => setOfficeIndex(e.target.value)}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Candidate Name"
+                    value={candidateName}
+                    onChange={(e) => setCandidateName(e.target.value)}
+                  />
                   <button onClick={handleAddCandidate}>Add Candidate</button>
                 </div>
               </div>
@@ -406,17 +539,33 @@ function AdminDashboard() {
   };
 
   if (!loggedIn) {
-    return <div style={{ padding: "20px" }}>Please log in to access the admin dashboard.</div>;
+    return (
+      <div style={{ padding: "20px" }}>
+        Please log in to access the admin dashboard.
+      </div>
+    );
   }
   if (!account) {
-    return <div style={{ padding: "20px" }}>Loading account information...</div>;
+    return (
+      <div style={{ padding: "20px" }}>Loading account information...</div>
+    );
   }
   if (!isAdmin) {
-    return <div style={{ padding: "20px" }}>Access denied. You are not an admin.</div>;
+    return (
+      <div style={{ padding: "20px" }}>
+        Access denied. You are not an admin.
+      </div>
+    );
   }
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", fontFamily: "Arial, sans-serif" }}>
+    <div
+      style={{
+        display: "flex",
+        minHeight: "100vh",
+        fontFamily: "Arial, sans-serif",
+      }}
+    >
       <Sidebar />
       <div style={{ flex: 1, padding: "20px" }}>
         {statusMessage && <p style={{ color: "green" }}>{statusMessage}</p>}
@@ -425,5 +574,6 @@ function AdminDashboard() {
     </div>
   );
 }
+
 
 export default AdminDashboard;

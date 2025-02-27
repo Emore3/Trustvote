@@ -4,107 +4,168 @@ import contractABI from "../abis/VotingSystem.json";
 import { useWeb3Auth } from "../Web3AuthContext";
 
 const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS;
-console.log(contractAddress)
 
 function ElectionResults() {
   const { provider, loggedIn } = useWeb3Auth();
   const [account, setAccount] = useState(null);
-  const [votingContract, setVotingContract] = useState(null);
-  const [electionId, setElectionId] = useState("");
-  const [electionData, setElectionData] = useState(null);
-  const [candidates, setCandidates] = useState([]);
+  const [votingContractRead, setVotingContractRead] = useState(null);
   const [statusMessage, setStatusMessage] = useState("");
+  const [electionsList, setElectionsList] = useState([]);
+  const [selectedElectionId, setSelectedElectionId] = useState(null);
+  const [selectedElectionDetails, setSelectedElectionDetails] = useState(null);
+  const [officeResults, setOfficeResults] = useState([]);
 
-  // Fetch election details and candidate list.
-  const getElectionData = async () => {
-    if (!votingContract || !electionId) return;
-    try {
-      // Assumes your contract has a getElectionDetails() function.
-      const result = await votingContract.getElectionDetails(electionId);
-      const name = result[0];
-      const active = result[1];
-      const candidateCount = Number(result[2]);
-
-      // Fetch candidates via getCandidates()
-      const candidateList = await votingContract.getCandidates(electionId);
-      setElectionData({ name, active, candidateCount });
-      setCandidates(candidateList);
-      setStatusMessage("");
-    } catch (error) {
-      console.error(error);
-      setStatusMessage("Error fetching election data. Ensure the election ID is correct.");
-    }
-  };
-
+  // ----------------- Initialization -----------------
   useEffect(() => {
     const init = async () => {
       if (provider) {
         try {
-          // Wrap the Web3Auth provider with ethers.js
-          const ethersProvider = new BrowserProvider(provider);
-          const signer = ethersProvider.getSigner();
-          const accounts = await ethersProvider.listAccounts();
+          const ethersProvider = new BrowserProvider(provider, 11155111);
+          ethersProvider.skipFetchAccounts = true;
+          const accounts = await ethersProvider.send("eth_accounts", []);
           if (accounts.length) {
             setAccount(accounts[0]);
-            const contract = new ethers.Contract(contractAddress, contractABI.abi, signer);
-            setVotingContract(contract);
+            const contractRead = new ethers.Contract(contractAddress, contractABI.abi, ethersProvider);
+            setVotingContractRead(contractRead);
           }
         } catch (error) {
-          console.error("Error initializing ElectionResults:", error);
-          setStatusMessage("Error initializing ElectionResults.");
+          console.error("Error initializing election results page:", error);
+          setStatusMessage("Error initializing page");
         }
       }
     };
     init();
   }, [provider]);
 
-  if (!loggedIn) {
-    return (
-      <div style={{ padding: "20px" }}>
-        Please log in to access election results.
-      </div>
-    );
-  }
+  // ----------------- Elections List Functions -----------------
+  const handleViewElections = async () => {
+    if (!votingContractRead) return;
+    try {
+      const countBN = await votingContractRead.electionCount();
+      const electionCount = Number(countBN.toString());
+      let list = [];
+      for (let i = 1; i <= electionCount; i++) {
+        const details = await votingContractRead.getElectionDetails(i);
+        // details: [name, active, startTime, endTime, officeCount]
+        list.push({
+          id: i,
+          name: details[0],
+          active: details[1],
+          startTime: Number(details[2]),
+          endTime: Number(details[3]),
+          officeCount: Number(details[4]),
+        });
+      }
+      setElectionsList(list);
+      setStatusMessage("Elections fetched successfully");
+    } catch (error) {
+      console.error(error);
+      setStatusMessage("Error fetching elections");
+    }
+  };
+
+  // ----------------- Election Selection and Results -----------------
+  const handleSelectElection = async (election) => {
+    setSelectedElectionId(election.id);
+    setSelectedElectionDetails(election);
+    let offices = [];
+    // Loop through each office for the election (from 0 to officeCount-1)
+    for (let i = 0; i < election.officeCount; i++) {
+      const candidates = await votingContractRead.getCandidates(election.id, i);
+      // Convert returned candidate objects to plain JS objects
+      const candidateResults = candidates.map((c) => ({
+        name: c.name,
+        voteCount: Number(c.voteCount),
+      }));
+      offices.push({
+        officeIndex: i,
+        officeName: "Office " + i, // Replace with actual office name if available
+        candidates: candidateResults,
+      });
+    }
+    setOfficeResults(offices);
+    setStatusMessage(`Results for election ${election.id} loaded`);
+  };
 
   return (
-    <div style={{ padding: "20px" }}>
+    <div style={{ padding: "20px", fontFamily: "Arial, sans-serif" }}>
       <h1>Election Results</h1>
-      {account ? <p>Connected as: {account}</p> : <p>Loading account...</p>}
-      <div style={{ marginBottom: "20px" }}>
-        <input
-          type="text"
-          placeholder="Enter Election ID"
-          value={electionId}
-          onChange={(e) => setElectionId(e.target.value)}
-        />
-        <button onClick={getElectionData}>Get Election Data</button>
-      </div>
-      {statusMessage && <p>{statusMessage}</p>}
-      {electionData && (
-        <div>
-          <h2>Election: {electionData.name}</h2>
-          <p>Status: {electionData.active ? "Active" : "Ended"}</p>
-          <p>Total Candidates: {electionData.candidateCount}</p>
-          <h3>Candidates</h3>
-          <table border="1" cellPadding="10">
-            <thead>
-              <tr>
-                <th>Index</th>
-                <th>Name</th>
-                <th>Vote Count</th>
-              </tr>
-            </thead>
-            <tbody>
-              {candidates.map((candidate, index) => (
-                <tr key={index}>
-                  <td>{index}</td>
-                  <td>{candidate.name}</td>
-                  <td>{candidate.voteCount.toString()}</td>
+      {statusMessage && <p style={{ color: "green" }}>{statusMessage}</p>}
+      {!account ? (
+        <p>Loading account information...</p>
+      ) : (
+        <>
+          <button onClick={handleViewElections}>Refresh Elections List</button>
+          {electionsList.length > 0 ? (
+            <table border="1" cellPadding="8" style={{ marginTop: "10px", width: "100%" }}>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Name</th>
+                  <th>Active</th>
+                  <th>Start Time</th>
+                  <th>End Time</th>
+                  <th>Offices</th>
+                  <th>Select</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {electionsList.map((election) => (
+                  <tr key={election.id}>
+                    <td>{election.id}</td>
+                    <td>{election.name}</td>
+                    <td>{(election.active && (Date.now() / 1000) <= election.endTime) ? "Yes" : "No"}</td>
+                    <td>{new Date(election.startTime * 1000).toLocaleString()}</td>
+                    <td>{new Date(election.endTime * 1000).toLocaleString()}</td>
+                    <td>{election.officeCount}</td>
+                    <td>
+                      <button onClick={() => handleSelectElection(election)}>View Results</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p>No elections found.</p>
+          )}
+
+          {selectedElectionId && (
+            <div style={{ marginTop: "20px" }}>
+              <h2>
+                Results for Election {selectedElectionId} - {selectedElectionDetails.name}
+              </h2>
+              {officeResults.length > 0 ? (
+                officeResults.map((office, idx) => (
+                  <div key={idx} style={{ marginBottom: "20px" }}>
+                    <h3>{office.officeName}</h3>
+                    {office.candidates.length > 0 ? (
+                      <table border="1" cellPadding="8">
+                        <thead>
+                          <tr>
+                            <th>Candidate Name</th>
+                            <th>Vote Count</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {office.candidates.map((cand, i) => (
+                            <tr key={i}>
+                              <td>{cand.name}</td>
+                              <td>{cand.voteCount}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <p>No candidates found for this office.</p>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <p>No office results available.</p>
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
