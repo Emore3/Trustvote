@@ -1,0 +1,25 @@
+changes to contract
+-by default all accounts should have the voter role
+-admin can ban voters by removing their role
+-automatically fund new accounts with test ether
+-view all ongoing elections
+-crud offices
+
+
+
+
+HP@Emore MINGW64 ~/Documents/django/Trustvote/blockchain (main)
+$ npx hardhat run scripts/deploy.js --network sepolia
+Deploying contract with the account: 0x84504767B8dA8aa4cEcd989b7e0fE15A4aE7f5A2
+VotingSystem deployed to: 0x1E4850ff41280f247746905EdD7ff46721dB925d
+
+HP@Emore MINGW64 ~/Documents/django/Trustvote/blockchain (main)
+$ npx hardhat run scripts/deploy.js --network sepolia
+Compiled 4 Solidity files successfully (evm target: paris).
+Deploying contract with the account: 0x84504767B8dA8aa4cEcd989b7e0fE15A4aE7f5A2
+VotingSystem deployed to: 0x85711cD54918f586f857B98B1E188e55E9c6029f
+
+$ npx hardhat run scripts/deploy.js --network sepolia
+Compiled 1 Solidity file successfully (evm target: paris).
+Deploying contract with the account: 0x84504767B8dA8aa4cEcd989b7e0fE15A4aE7f5A2
+VotingSystem deployed to: 0x04e869A1072db717B51D1E4D2C758944fB65701D

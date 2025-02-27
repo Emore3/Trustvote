@@ -4,7 +4,7 @@ import { keccak256, toUtf8Bytes } from "ethers";
 import contractABI from "../abis/VotingSystem.json";
 import { useWeb3Auth } from "../Web3AuthContext";
 
-const contractAddress = import.meta.env.CONTRACT_ADDRESS;
+const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS;
 const VOTER_ROLE = keccak256(toUtf8Bytes("VOTER_ROLE"));
 
 function VoterDashboard() {

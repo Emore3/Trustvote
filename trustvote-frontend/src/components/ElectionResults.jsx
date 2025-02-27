@@ -3,7 +3,8 @@ import { ethers, BrowserProvider } from "ethers";
 import contractABI from "../abis/VotingSystem.json";
 import { useWeb3Auth } from "../Web3AuthContext";
 
-const contractAddress = import.meta.env.CONTRACT_ADDRESS;
+const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS;
+console.log(contractAddress)
 
 function ElectionResults() {
   const { provider, loggedIn } = useWeb3Auth();
