@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { ethers } from "ethers";
-import { BrowserProvider } from "ethers";
+import { ethers, BrowserProvider } from "ethers";
 import contractABI from "../abis/VotingSystem.json";
+import { useWeb3Auth } from "../Web3AuthContext";
 
-const contractAddress = "0x5fbdb2315678afecb367f032d93f642f64180aa3";
+const contractAddress = import.meta.env.CONTRACT_ADDRESS;
 
 function ElectionResults() {
+  const { provider, loggedIn } = useWeb3Auth();
   const [account, setAccount] = useState(null);
   const [votingContract, setVotingContract] = useState(null);
   const [electionId, setElectionId] = useState("");
@@ -13,11 +14,11 @@ function ElectionResults() {
   const [candidates, setCandidates] = useState([]);
   const [statusMessage, setStatusMessage] = useState("");
 
-  // Function to fetch election details and candidate list.
+  // Fetch election details and candidate list.
   const getElectionData = async () => {
     if (!votingContract || !electionId) return;
     try {
-      // This call assumes your contract has a getElectionDetails() function.
+      // Assumes your contract has a getElectionDetails() function.
       const result = await votingContract.getElectionDetails(electionId);
       const name = result[0];
       const active = result[1];
@@ -36,24 +37,38 @@ function ElectionResults() {
 
   useEffect(() => {
     const init = async () => {
-      if (window.ethereum) {
-        const provider = new BrowserProvider(window.ethereum);
-        const signer = await provider.getSigner();
-        const accounts = await provider.listAccounts();
-        if (accounts.length) {
-          setAccount(accounts[0]);
-          const contract = new ethers.Contract(contractAddress, contractABI.abi, signer);
-          setVotingContract(contract);
+      if (provider) {
+        try {
+          // Wrap the Web3Auth provider with ethers.js
+          const ethersProvider = new BrowserProvider(provider);
+          const signer = ethersProvider.getSigner();
+          const accounts = await ethersProvider.listAccounts();
+          if (accounts.length) {
+            setAccount(accounts[0]);
+            const contract = new ethers.Contract(contractAddress, contractABI.abi, signer);
+            setVotingContract(contract);
+          }
+        } catch (error) {
+          console.error("Error initializing ElectionResults:", error);
+          setStatusMessage("Error initializing ElectionResults.");
         }
       }
     };
     init();
-  }, []);
+  }, [provider]);
+
+  if (!loggedIn) {
+    return (
+      <div style={{ padding: "20px" }}>
+        Please log in to access election results.
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: "20px" }}>
       <h1>Election Results</h1>
-      {account ? <p>Connected as: {account?.address}</p> : <p>Please connect your wallet.</p>}
+      {account ? <p>Connected as: {account}</p> : <p>Loading account...</p>}
       <div style={{ marginBottom: "20px" }}>
         <input
           type="text"

@@ -10,7 +10,11 @@ module.exports = {
     },
     hardhat: {
       chainId: 1337
-    }
+    },
+    sepolia: {
+      url: "https://rpc.ankr.com/eth_sepolia",
+      accounts: [process.env.ACCOUNT_PRIV_KEY]
+    },
   },
   paths: {
     sources: "./contracts",

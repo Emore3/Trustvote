@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from "react";
-import { ethers } from "ethers";
-import { BrowserProvider } from "ethers";
+import { ethers, BrowserProvider } from "ethers";
 import { keccak256, toUtf8Bytes } from "ethers";
 import contractABI from "../abis/VotingSystem.json";
+import { useWeb3Auth } from "../Web3AuthContext";
 
-const contractAddress = "0x5fbdb2315678afecb367f032d93f642f64180aa3";
+const contractAddress = import.meta.env.CONTRACT_ADDRESS;
 const VOTER_ROLE = keccak256(toUtf8Bytes("VOTER_ROLE"));
 
 function VoterDashboard() {
+  const { provider, loggedIn } = useWeb3Auth();
   const [account, setAccount] = useState(null);
   const [votingContract, setVotingContract] = useState(null);
   const [statusMessage, setStatusMessage] = useState("");
@@ -17,22 +18,28 @@ function VoterDashboard() {
 
   useEffect(() => {
     const init = async () => {
-      if (window.ethereum) {
-        const provider = new BrowserProvider(window.ethereum);
-        const signer = await provider.getSigner();
-        const accounts = await provider.listAccounts();
-        if (accounts.length) {
-          setAccount(accounts[0]);
-          const contract = new ethers.Contract(contractAddress, contractABI.abi, signer);
-          setVotingContract(contract);
-          // Check if connected account is a registered voter
-          const voterStatus = await contract.hasRole(VOTER_ROLE, accounts[0]);
-          setIsVoter(voterStatus);
+      if (provider) {
+        try {
+          // Wrap the Web3Auth provider with ethers.js
+          const ethersProvider = new BrowserProvider(provider);
+          const signer = ethersProvider.getSigner();
+          const accounts = await ethersProvider.listAccounts();
+          if (accounts.length) {
+            setAccount(accounts[0]);
+            const contract = new ethers.Contract(contractAddress, contractABI.abi, signer);
+            setVotingContract(contract);
+            // Check if connected account is a registered voter
+            const voterStatus = await contract.hasRole(VOTER_ROLE, accounts[0]);
+            setIsVoter(voterStatus);
+          }
+        } catch (error) {
+          console.error("Error initializing voter dashboard:", error);
+          setStatusMessage("Error initializing dashboard");
         }
       }
     };
     init();
-  }, []);
+  }, [provider]);
 
   const handleVote = async () => {
     if (!votingContract) return;
@@ -46,18 +53,34 @@ function VoterDashboard() {
     }
   };
 
+  if (!loggedIn) {
+    return (
+      <div style={{ padding: "20px" }}>
+        Please log in to access the voter dashboard.
+      </div>
+    );
+  }
+
   if (!account) {
-    return <div style={{ padding: "20px" }}>Please connect your wallet from the Home page.</div>;
+    return (
+      <div style={{ padding: "20px" }}>
+        Loading account information...
+      </div>
+    );
   }
 
   if (!isVoter) {
-    return <div style={{ padding: "20px" }}>Access denied. You are not a registered voter.</div>;
+    return (
+      <div style={{ padding: "20px" }}>
+        Access denied. You are not a registered voter.
+      </div>
+    );
   }
 
   return (
     <div style={{ padding: "20px" }}>
       <h1>Voter Dashboard</h1>
-      <p>Connected as: {account?.address}</p>
+      <p>Connected as: {account}</p>
       {statusMessage && <p>{statusMessage}</p>}
 
       <div style={{ border: "1px solid #ccc", padding: "10px" }}>

@@ -57,6 +57,13 @@ contract VotingSystem is AccessControl {
         grantRole(VOTER_ROLE, voter);
     }
 
+    /// @notice Admin function to add a new admin.
+    /// @param newAdmin The address to be granted the admin role.
+    function addAdmin(address newAdmin) external onlyAdmin {
+        grantRole(ADMIN_ROLE, newAdmin);
+    }
+
+
     /// @notice Admin function to create a new election.
     /// @param _name The name of the election.
     function createElection(string memory _name) external onlyAdmin {
