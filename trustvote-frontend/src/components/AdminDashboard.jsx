@@ -3,91 +3,64 @@ import { ethers, BrowserProvider } from "ethers";
 import { keccak256, toUtf8Bytes } from "ethers";
 import contractABI from "../abis/VotingSystem.json";
 import { useWeb3Auth } from "../Web3AuthContext";
-import { Web3Auth } from "@web3auth/modal";
-
 
 const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS;
 const ADMIN_ROLE = keccak256(toUtf8Bytes("ADMIN_ROLE"));
 
 function AdminDashboard() {
+  // Common states
   const { provider, loggedIn } = useWeb3Auth();
   const [account, setAccount] = useState(null);
-  const [votingContract, setVotingContract] = useState(null);       // Writeable instance (with signer)
-  const [votingContractRead, setVotingContractRead] = useState(null); // Read-only instance (with provider)
+  const [votingContract, setVotingContract] = useState(null); // Writeable instance
+  const [votingContractRead, setVotingContractRead] = useState(null); // Read-only instance
   const [statusMessage, setStatusMessage] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
+  const [currentSection, setCurrentSection] = useState("dashboard");
 
-  // States for Admin CRUD
+  // For elections list and selection
+  const [electionsList, setElectionsList] = useState([]);
+  const [selectedElectionId, setSelectedElectionId] = useState(null);
+  const [selectedElectionDetails, setSelectedElectionDetails] = useState(null);
+
+  // States for Admin management
   const [newAdmin, setNewAdmin] = useState("");
-  const [removeAdminAddr, setRemoveAdminAddr] = useState("");
-  const [oldAdmin, setOldAdmin] = useState("");
-  const [updateAdminAddr, setUpdateAdminAddr] = useState("");
-  const [adminsList, setAdminsList] = useState([]);
 
-  // States for Voter CRUD
+  // States for Voter management
   const [newVoter, setNewVoter] = useState("");
-  const [removeVoterAddr, setRemoveVoterAddr] = useState("");
-  const [oldVoter, setOldVoter] = useState("");
-  const [updateVoterAddr, setUpdateVoterAddr] = useState("");
-  const [votersList, setVotersList] = useState([]);
 
-  // States for Election CRUD
-  const [electionName, setElectionName] = useState("");
-  const [electionStartTime, setElectionStartTime] = useState("");
-  const [electionEndTime, setElectionEndTime] = useState("");
-  const [updateElectionId, setUpdateElectionId] = useState("");
+  // States for Election management (for updating selected election)
   const [updateElectionName, setUpdateElectionName] = useState("");
   const [updateElectionStartTime, setUpdateElectionStartTime] = useState("");
   const [updateElectionEndTime, setUpdateElectionEndTime] = useState("");
-  const [deleteElectionId, setDeleteElectionId] = useState("");
-  const [endElectionId, setEndElectionId] = useState("");
 
-  // States for Office & Candidate CRUD
-  const [officeElectionId, setOfficeElectionId] = useState("");
+  // States for Office & Candidate management (using selected election)
   const [officeName, setOfficeName] = useState("");
-  const [candidateElectionId, setCandidateElectionId] = useState("");
-  const [officeIndex, setOfficeIndex] = useState("");
   const [candidateName, setCandidateName] = useState("");
+  const [officeIndex, setOfficeIndex] = useState(""); // if needed for candidate operations
 
+  // ----------------- Initialization -----------------
   useEffect(() => {
     const init = async () => {
       if (provider) {
         try {
-          // Create a BrowserProvider using the Web3Auth provider and Sepolia's chain id (11155111)
+          // Create BrowserProvider with chain id (e.g., Sepolia: 11155111)
           const ethersProvider = new BrowserProvider(provider, 11155111);
-          // create a signer
-          const signer = ethersProvider.getSigner();
-
-
           ethersProvider.skipFetchAccounts = true;
           // Manually fetch accounts using "eth_accounts"
           const accounts = await ethersProvider.send("eth_accounts", []);
           if (accounts.length) {
             setAccount(accounts[0]);
-            // Create a read-only contract instance
-            const contractRead = new ethers.Contract(
-              contractAddress,
-              contractABI.abi,
-              ethersProvider
-            );
-            // // Create a write contract instance
-            // const contractWithSigner = new ethers.Contract(
-            //   contractAddress,
-            //   contractABI.abi,
-            //   signer
-            // );
-            // Check if the connected account has the ADMIN_ROLE
+            // Create read-only contract instance using ethersProvider
+            const contractRead = new ethers.Contract(contractAddress, contractABI.abi, ethersProvider);
+            // Check if connected account has ADMIN_ROLE
             const adminStatus = await contractRead.hasRole(ADMIN_ROLE, accounts[0]);
             setIsAdmin(adminStatus);
-            // For write operations, get the signer and connect it to the contract
-
-            // Retrieve the private key using the provider's request method
+            // Retrieve private key via provider (as recommended by Web3Auth)
             const pk = await provider.request({ method: "eth_private_key" });
-            // Create a Wallet signer using the private key and the ethers provider
+            console.log("Private key:", pk);
+            // Create a Wallet signer using the private key and ethersProvider
             const walletSigner = new ethers.Wallet(pk, ethersProvider);
-            console.log("private key :" + pk)
-
-            // Connect the walletSigner to the contract for state-changing operations
+            // Create writeable contract instance by connecting the signer
             const contractWithSigner = contractRead.connect(walletSigner);
             setVotingContract(contractWithSigner);
             setVotingContractRead(contractRead);
@@ -101,7 +74,45 @@ function AdminDashboard() {
     init();
   }, [provider]);
 
-  // --------- Admin CRUD Functions ---------
+  // ----------------- Elections List Functions -----------------
+  const handleViewElections = async () => {
+    if (!votingContractRead) return;
+    try {
+      const countBN = await votingContractRead.electionCount();
+      const electionCount = Number(countBN.toString());
+      let list = [];
+      for (let i = 1; i <= electionCount; i++) {
+        const details = await votingContractRead.getElectionDetails(i);
+        // details: [name, active, startTime, endTime, officeCount]
+        list.push({
+          id: i,
+          name: details[0],
+          active: details[1],
+          startTime: Number(details[2]),
+          endTime: Number(details[3]),
+          officeCount: Number(details[4]),
+        });
+      }
+      setElectionsList(list);
+      setStatusMessage("Elections fetched successfully");
+    } catch (error) {
+      console.error(error);
+      setStatusMessage("Error fetching elections");
+    }
+  };
+
+  const handleSelectElection = async (election) => {
+    setSelectedElectionId(election.id);
+    setSelectedElectionDetails(election);
+    // Pre-fill update fields with current details (convert timestamps to datetime-local format)
+    const startDate = new Date(election.startTime * 1000).toISOString().slice(0,16);
+    const endDate = new Date(election.endTime * 1000).toISOString().slice(0,16);
+    setUpdateElectionName(election.name);
+    setUpdateElectionStartTime(startDate);
+    setUpdateElectionEndTime(endDate);
+  };
+
+  // ----------------- Admin CRUD Functions -----------------
   const handleAddAdmin = async () => {
     if (!votingContract) return;
     try {
@@ -114,43 +125,19 @@ function AdminDashboard() {
     }
   };
 
-  const handleRemoveAdmin = async () => {
-    if (!votingContract) return;
-    try {
-      const tx = await votingContract.removeAdmin(removeAdminAddr);
-      await tx.wait();
-      setStatusMessage("Admin removed successfully");
-    } catch (error) {
-      console.error(error);
-      setStatusMessage("Error removing admin");
-    }
-  };
-
-  const handleUpdateAdmin = async () => {
-    if (!votingContract) return;
-    try {
-      const tx = await votingContract.updateAdmin(oldAdmin, updateAdminAddr);
-      await tx.wait();
-      setStatusMessage("Admin updated successfully");
-    } catch (error) {
-      console.error(error);
-      setStatusMessage("Error updating admin");
-    }
-  };
-
   const handleViewAdmins = async () => {
-    if (!votingContract) return;
+    if (!votingContractRead) return;
     try {
-      const admins = await votingContract.viewAdmins();
-      setAdminsList(admins);
+      const Admins = await votingContractRead.viewAdmins();
+      setAdminsList(Admins);
       setStatusMessage("Admins fetched successfully");
     } catch (error) {
       console.error(error);
-      setStatusMessage("Error fetching admins");
+      setStatusMessage("Error fetching Admins");
     }
   };
 
-  // --------- Voter CRUD Functions ---------
+  // ----------------- Voter CRUD Functions -----------------
   const handleRegisterVoter = async () => {
     if (!votingContract) return;
     try {
@@ -163,34 +150,10 @@ function AdminDashboard() {
     }
   };
 
-  const handleRemoveVoter = async () => {
-    if (!votingContract) return;
-    try {
-      const tx = await votingContract.removeVoter(removeVoterAddr);
-      await tx.wait();
-      setStatusMessage("Voter removed successfully");
-    } catch (error) {
-      console.error(error);
-      setStatusMessage("Error removing voter");
-    }
-  };
-
-  const handleUpdateVoter = async () => {
-    if (!votingContract) return;
-    try {
-      const tx = await votingContract.updateVoter(oldVoter, updateVoterAddr);
-      await tx.wait();
-      setStatusMessage("Voter updated successfully");
-    } catch (error) {
-      console.error(error);
-      setStatusMessage("Error updating voter");
-    }
-  };
-
   const handleViewVoters = async () => {
-    if (!votingContract) return;
+    if (!votingContractRead) return;
     try {
-      const voters = await votingContract.viewVoters();
+      const voters = await votingContractRead.viewVoters();
       setVotersList(voters);
       setStatusMessage("Voters fetched successfully");
     } catch (error) {
@@ -199,30 +162,17 @@ function AdminDashboard() {
     }
   };
 
-  // --------- Election CRUD Functions ---------
-  const handleCreateElection = async () => {
-    if (!votingContract) return;
-    try {
-      const start = Number(electionStartTime);
-      const end = Number(electionEndTime);
-      const tx = await votingContract.createElection(electionName, start, end);
-      await tx.wait();
-      setStatusMessage("Election created successfully");
-    } catch (error) {
-      console.error(error);
-      setStatusMessage("Error creating election");
-    }
-  };
-
+  // ----------------- Election CRUD Functions -----------------
   const handleUpdateElection = async () => {
-    if (!votingContract) return;
+    if (!votingContract || !selectedElectionId) return;
     try {
-      const electionId = Number(updateElectionId);
-      const start = Number(updateElectionStartTime);
-      const end = Number(updateElectionEndTime);
-      const tx = await votingContract.updateElection(electionId, updateElectionName, start, end);
+      // Convert datetime-local strings to Unix timestamps (in seconds)
+      const start = Math.floor(new Date(updateElectionStartTime).getTime() / 1000);
+      const end = Math.floor(new Date(updateElectionEndTime).getTime() / 1000);
+      const tx = await votingContract.updateElection(selectedElectionId, updateElectionName, start, end);
       await tx.wait();
       setStatusMessage("Election updated successfully");
+      handleViewElections();
     } catch (error) {
       console.error(error);
       setStatusMessage("Error updating election");
@@ -230,12 +180,14 @@ function AdminDashboard() {
   };
 
   const handleDeleteElection = async () => {
-    if (!votingContract) return;
+    if (!votingContract || !selectedElectionId) return;
     try {
-      const electionId = Number(deleteElectionId);
-      const tx = await votingContract.deleteElection(electionId);
+      const tx = await votingContract.deleteElection(selectedElectionId);
       await tx.wait();
       setStatusMessage("Election deleted successfully");
+      setSelectedElectionId(null);
+      setSelectedElectionDetails(null);
+      handleViewElections();
     } catch (error) {
       console.error(error);
       setStatusMessage("Error deleting election");
@@ -243,26 +195,26 @@ function AdminDashboard() {
   };
 
   const handleEndElection = async () => {
-    if (!votingContract) return;
+    if (!votingContract || !selectedElectionId) return;
     try {
-      const electionId = Number(endElectionId);
-      const tx = await votingContract.endElection(electionId);
+      const tx = await votingContract.endElection(selectedElectionId);
       await tx.wait();
       setStatusMessage("Election ended successfully");
+      handleViewElections();
     } catch (error) {
       console.error(error);
       setStatusMessage("Error ending election");
     }
   };
 
-  // --------- Office & Candidate CRUD Functions ---------
+  // ----------------- Office & Candidate CRUD Functions -----------------
   const handleAddOffice = async () => {
-    if (!votingContract) return;
+    if (!votingContract || !selectedElectionId) return;
     try {
-      const electionId = Number(officeElectionId);
-      const tx = await votingContract.addOffice(electionId, officeName);
+      const tx = await votingContract.addOffice(selectedElectionId, officeName);
       await tx.wait();
       setStatusMessage("Office added successfully");
+      // Optionally refresh selected election details if needed.
     } catch (error) {
       console.error(error);
       setStatusMessage("Error adding office");
@@ -270,11 +222,10 @@ function AdminDashboard() {
   };
 
   const handleAddCandidate = async () => {
-    if (!votingContract) return;
+    if (!votingContract || !selectedElectionId) return;
     try {
-      const electionId = Number(candidateElectionId);
       const officeIdx = Number(officeIndex);
-      const tx = await votingContract.addCandidate(electionId, officeIdx, candidateName);
+      const tx = await votingContract.addCandidate(selectedElectionId, officeIdx, candidateName);
       await tx.wait();
       setStatusMessage("Candidate added successfully");
     } catch (error) {
@@ -283,122 +234,193 @@ function AdminDashboard() {
     }
   };
 
+  // ----------------- Sidebar Component -----------------
+  const Sidebar = () => (
+    <div style={{ width: "250px", background: "#f4f4f4", padding: "20px", height: "100vh" }}>
+      <h3 style={{ color: "black"}}>Dashboard</h3>
+      <ul style={{ listStyle: "none", padding: 0 }}>
+        <li
+          style={{ marginBottom: "10px", cursor: "pointer", color: currentSection === "dashboard" ? "blue" : "black" }}
+          onClick={() => setCurrentSection("dashboard")}
+        >
+          Overview
+        </li>
+        <li
+          style={{ marginBottom: "10px", cursor: "pointer", color: currentSection === "admin" ? "blue" : "black" }}
+          onClick={() => setCurrentSection("admin")}
+        >
+          Admin Management
+        </li>
+        <li
+          style={{ marginBottom: "10px", cursor: "pointer", color: currentSection === "voter" ? "blue" : "black" }}
+          onClick={() => setCurrentSection("voter")}
+        >
+          Voter Management
+        </li>
+        <li
+          style={{ marginBottom: "10px", cursor: "pointer", color: currentSection === "election" ? "blue" : "black" }}
+          onClick={() => setCurrentSection("election")}
+        >
+          Elections
+        </li>
+        <li
+          style={{ marginBottom: "10px", cursor: "pointer", color: currentSection === "officeCandidate" ? "blue" : "black" }}
+          onClick={() => setCurrentSection("officeCandidate")}
+        >
+          Office & Candidate
+        </li>
+      </ul>
+    </div>
+  );
+
+  // ----------------- Render Sections -----------------
+  const renderSection = () => {
+    switch (currentSection) {
+      case "dashboard":
+        return (
+          <div>
+            <h2>Overview</h2>
+            <p>Welcome, {account}. You are {isAdmin ? "an admin" : "not an admin"}.</p>
+            <button onClick={handleViewElections}>Refresh Elections List</button>
+            {electionsList.length > 0 ? (
+              <table border="1" cellPadding="8" style={{ marginTop: "10px" }}>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Active</th>
+                    <th>Start Time</th>
+                    <th>End Time</th>
+                    <th>Offices</th>
+                    <th>Select</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {electionsList.map((election) => (
+                    <tr key={election.id}>
+                      <td>{election.id}</td>
+                      <td>{election.name}</td>
+                      <td>{election.active ? "Yes" : "No"}</td>
+                      <td>{new Date(election.startTime * 1000).toLocaleString()}</td>
+                      <td>{new Date(election.endTime * 1000).toLocaleString()}</td>
+                      <td>{election.officeCount}</td>
+                      <td>
+                        <button onClick={() => handleSelectElection(election)}>Select</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p>No elections found.</p>
+            )}
+          </div>
+        );
+      case "admin":
+        return (
+          <div>
+            <h2>Admin Management</h2>
+            <button onClick={handleViewAdmins}>Refresh Admin List</button>
+            {/** Here you can also render a list of admins if needed */}
+            <h3>Add New Admin</h3>
+            <input type="text" placeholder="New admin address" value={newAdmin} onChange={(e) => setNewAdmin(e.target.value)} />
+            <button onClick={handleAddAdmin}>Add Admin</button>
+          </div>
+        );
+      case "voter":
+        return (
+          <div>
+            <h2>Voter Management</h2>
+            <button onClick={handleViewVoters}>Refresh Voter List</button>
+            {/** Render voters list if desired */}
+            <h3>Register New Voter</h3>
+            <input type="text" placeholder="Voter address" value={newVoter} onChange={(e) => setNewVoter(e.target.value)} />
+            <button onClick={handleRegisterVoter}>Register Voter</button>
+          </div>
+        );
+      case "election":
+        return (
+          <div>
+            <h2>Manage Election</h2>
+            {selectedElectionId ? (
+              <div>
+                <p>
+                  Selected Election ID: <strong>{selectedElectionId}</strong> (Name:{" "}
+                  <strong>{selectedElectionDetails?.name}</strong>)
+                </p>
+                <h3>Update Election</h3>
+                <label>
+                  Name:{" "}
+                  <input type="text" value={updateElectionName} onChange={(e) => setUpdateElectionName(e.target.value)} />
+                </label>
+                <br />
+                <label>
+                  Start Time:{" "}
+                  <input type="datetime-local" value={updateElectionStartTime} onChange={(e) => setUpdateElectionStartTime(e.target.value)} />
+                </label>
+                <br />
+                <label>
+                  End Time:{" "}
+                  <input type="datetime-local" value={updateElectionEndTime} onChange={(e) => setUpdateElectionEndTime(e.target.value)} />
+                </label>
+                <br />
+                <button onClick={handleUpdateElection}>Update Election</button>
+                <button onClick={handleEndElection} style={{ marginLeft: "10px" }}>End Election</button>
+                <button onClick={handleDeleteElection} style={{ marginLeft: "10px" }}>Delete Election</button>
+              </div>
+            ) : (
+              <p>Please select an election from the Overview tab.</p>
+            )}
+          </div>
+        );
+      case "officeCandidate":
+        return (
+          <div>
+            <h2>Office & Candidate Management</h2>
+            {selectedElectionId ? (
+              <div>
+                <p>
+                  Managing election ID: <strong>{selectedElectionId}</strong> (Name:{" "}
+                  <strong>{selectedElectionDetails?.name}</strong>)
+                </p>
+                <div>
+                  <h3>Add Office</h3>
+                  <input type="text" placeholder="Office Name" value={officeName} onChange={(e) => setOfficeName(e.target.value)} />
+                  <button onClick={handleAddOffice}>Add Office</button>
+                </div>
+                <div style={{ marginTop: "20px" }}>
+                  <h3>Add Candidate</h3>
+                  <input type="text" placeholder="Office Index" value={officeIndex} onChange={(e) => setOfficeIndex(e.target.value)} />
+                  <input type="text" placeholder="Candidate Name" value={candidateName} onChange={(e) => setCandidateName(e.target.value)} />
+                  <button onClick={handleAddCandidate}>Add Candidate</button>
+                </div>
+              </div>
+            ) : (
+              <p>Please select an election from the Overview tab.</p>
+            )}
+          </div>
+        );
+      default:
+        return <div>Select a section from the sidebar.</div>;
+    }
+  };
+
   if (!loggedIn) {
     return <div style={{ padding: "20px" }}>Please log in to access the admin dashboard.</div>;
   }
-
   if (!account) {
     return <div style={{ padding: "20px" }}>Loading account information...</div>;
   }
-
   if (!isAdmin) {
     return <div style={{ padding: "20px" }}>Access denied. You are not an admin.</div>;
   }
 
   return (
-    <div style={{ padding: "20px" }}>
-      <h1>Admin Dashboard</h1>
-      <p>Connected as: {account}</p>
-      {statusMessage && <p>{statusMessage}</p>}
-
-      <h2>Admin Operations</h2>
-      <div>
-        <h3>Add Admin</h3>
-        <input type="text" placeholder="New admin address" value={newAdmin} onChange={(e) => setNewAdmin(e.target.value)} />
-        <button onClick={handleAddAdmin}>Add Admin</button>
-      </div>
-      <div>
-        <h3>Remove Admin</h3>
-        <input type="text" placeholder="Admin address to remove" value={removeAdminAddr} onChange={(e) => setRemoveAdminAddr(e.target.value)} />
-        <button onClick={handleRemoveAdmin}>Remove Admin</button>
-      </div>
-      <div>
-        <h3>Update Admin</h3>
-        <input type="text" placeholder="Old admin address" value={oldAdmin} onChange={(e) => setOldAdmin(e.target.value)} />
-        <input type="text" placeholder="New admin address" value={updateAdminAddr} onChange={(e) => setUpdateAdminAddr(e.target.value)} />
-        <button onClick={handleUpdateAdmin}>Update Admin</button>
-      </div>
-      <div>
-        <h3>View Admins</h3>
-        <button onClick={handleViewAdmins}>View Admins</button>
-        {adminsList.length > 0 && (
-          <ul>
-            {adminsList.map((admin, index) => (
-              <li key={index}>{admin}</li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      <h2>Voter Operations</h2>
-      <div>
-        <h3>Register Voter</h3>
-        <input type="text" placeholder="Voter address" value={newVoter} onChange={(e) => setNewVoter(e.target.value)} />
-        <button onClick={handleRegisterVoter}>Register Voter</button>
-      </div>
-      <div>
-        <h3>Remove Voter</h3>
-        <input type="text" placeholder="Voter address to remove" value={removeVoterAddr} onChange={(e) => setRemoveVoterAddr(e.target.value)} />
-        <button onClick={handleRemoveVoter}>Remove Voter</button>
-      </div>
-      <div>
-        <h3>Update Voter</h3>
-        <input type="text" placeholder="Old voter address" value={oldVoter} onChange={(e) => setOldVoter(e.target.value)} />
-        <input type="text" placeholder="New voter address" value={updateVoterAddr} onChange={(e) => setUpdateVoterAddr(e.target.value)} />
-        <button onClick={handleUpdateVoter}>Update Voter</button>
-      </div>
-      <div>
-        <h3>View Voters</h3>
-        <button onClick={handleViewVoters}>View Voters</button>
-        {votersList.length > 0 && (
-          <ul>
-            {votersList.map((voter, index) => (
-              <li key={index}>{voter}</li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      <h2>Election Operations</h2>
-      <div>
-        <h3>Create Election</h3>
-        <input type="text" placeholder="Election Name" value={electionName} onChange={(e) => setElectionName(e.target.value)} />
-        <input type="text" placeholder="Start Time (unix timestamp)" value={electionStartTime} onChange={(e) => setElectionStartTime(e.target.value)} />
-        <input type="text" placeholder="End Time (unix timestamp)" value={electionEndTime} onChange={(e) => setElectionEndTime(e.target.value)} />
-        <button onClick={handleCreateElection}>Create Election</button>
-      </div>
-      <div>
-        <h3>Update Election</h3>
-        <input type="text" placeholder="Election ID" value={updateElectionId} onChange={(e) => setUpdateElectionId(e.target.value)} />
-        <input type="text" placeholder="New Election Name" value={updateElectionName} onChange={(e) => setUpdateElectionName(e.target.value)} />
-        <input type="text" placeholder="New Start Time (unix timestamp)" value={updateElectionStartTime} onChange={(e) => setUpdateElectionStartTime(e.target.value)} />
-        <input type="text" placeholder="New End Time (unix timestamp)" value={updateElectionEndTime} onChange={(e) => setUpdateElectionEndTime(e.target.value)} />
-        <button onClick={handleUpdateElection}>Update Election</button>
-      </div>
-      <div>
-        <h3>Delete Election</h3>
-        <input type="text" placeholder="Election ID to delete" value={deleteElectionId} onChange={(e) => setDeleteElectionId(e.target.value)} />
-        <button onClick={handleDeleteElection}>Delete Election</button>
-      </div>
-      <div>
-        <h3>End Election</h3>
-        <input type="text" placeholder="Election ID to end" value={endElectionId} onChange={(e) => setEndElectionId(e.target.value)} />
-        <button onClick={handleEndElection}>End Election</button>
-      </div>
-
-      <h2>Office & Candidate Operations</h2>
-      <div>
-        <h3>Add Office</h3>
-        <input type="text" placeholder="Election ID for Office" value={officeElectionId} onChange={(e) => setOfficeElectionId(e.target.value)} />
-        <input type="text" placeholder="Office Name" value={officeName} onChange={(e) => setOfficeName(e.target.value)} />
-        <button onClick={handleAddOffice}>Add Office</button>
-      </div>
-      <div>
-        <h3>Add Candidate</h3>
-        <input type="text" placeholder="Election ID for Candidate" value={candidateElectionId} onChange={(e) => setCandidateElectionId(e.target.value)} />
-        <input type="text" placeholder="Office Index" value={officeIndex} onChange={(e) => setOfficeIndex(e.target.value)} />
-        <input type="text" placeholder="Candidate Name" value={candidateName} onChange={(e) => setCandidateName(e.target.value)} />
-        <button onClick={handleAddCandidate}>Add Candidate</button>
+    <div style={{ display: "flex", minHeight: "100vh", fontFamily: "Arial, sans-serif" }}>
+      <Sidebar />
+      <div style={{ flex: 1, padding: "20px" }}>
+        {statusMessage && <p style={{ color: "green" }}>{statusMessage}</p>}
+        {renderSection()}
       </div>
     </div>
   );

@@ -13,7 +13,7 @@ module.exports = {
     },
     sepolia: {
       url: "https://rpc.ankr.com/eth_sepolia",
-      accounts: [process.env.ACCOUNT_PRIV_KEY]
+      accounts: [process.env.ACCOUNT_PRIV_KEY],
     },
   },
   paths: {

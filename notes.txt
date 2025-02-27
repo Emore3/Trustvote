@@ -3,8 +3,17 @@ changes to contract
 -admin can ban voters by removing their role
 -automatically fund new accounts with test ether
 -view all ongoing elections
--crud offices
+-crud operations for offices
+-crud operations to candidates
 
+changes to frontend
+- User sees account info on dashboard
+
+
+- setbacks
+- anonymousity _ blockchain was designed with anonymousity in mind so knowing your users can be tricky
+- gas fees _ to mine the chain 
+- web3 is very complex _ common people have a low understanding of web3
 
 
 
