@@ -1,94 +1,85 @@
-import React, { useState, useEffect } from "react";
-import { ethers, BrowserProvider } from "ethers";
-import { keccak256, toUtf8Bytes } from "ethers";
-import contractABI from "../abis/VotingSystem.json";
-import { useWeb3Auth } from "../Web3AuthContext";
-import { log } from "@web3auth/base";
+"use client"
 
-const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS;
-const VOTER_ROLE = keccak256(toUtf8Bytes("VOTER_ROLE"));
+import { useState, useEffect } from "react"
+import { ethers, BrowserProvider } from "ethers"
+import { keccak256, toUtf8Bytes } from "ethers"
+import contractABI from "../abis/VotingSystem.json"
+import { useWeb3Auth } from "../Web3AuthContext"
+
+const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS
+const VOTER_ROLE = keccak256(toUtf8Bytes("VOTER_ROLE"))
 
 function VoterDashboard() {
-  const { provider, loggedIn } = useWeb3Auth();
-  const [account, setAccount] = useState(null);
-  const [votingContract, setVotingContract] = useState(null); // writeable instance
-  const [votingContractRead, setVotingContractRead] = useState(null); // read-only instance
-  const [statusMessage, setStatusMessage] = useState("");
-  const [isVoter, setIsVoter] = useState(false);
-  const [currentSection, setCurrentSection] = useState("elections");
+  const { provider, loggedIn } = useWeb3Auth()
+  const [account, setAccount] = useState(null)
+  const [votingContract, setVotingContract] = useState(null) // writeable instance
+  const [votingContractRead, setVotingContractRead] = useState(null) // read-only instance
+  const [statusMessage, setStatusMessage] = useState("")
+  const [isVoter, setIsVoter] = useState(false)
+  const [currentSection, setCurrentSection] = useState("elections")
+  const [loading, setLoading] = useState(false)
 
   // Elections and selection
-  const [electionsList, setElectionsList] = useState([]);
-  const [selectedElectionId, setSelectedElectionId] = useState(null);
-  const [selectedElectionDetails, setSelectedElectionDetails] = useState(null);
-
-  // Vote casting inputs
-  const [officeIndex, setOfficeIndex] = useState("");
-  const [candidateIndex, setCandidateIndex] = useState("");
-
-  const [loading, setLoading] = useState(false);
+  const [electionsList, setElectionsList] = useState([])
+  const [selectedElectionId, setSelectedElectionId] = useState(null)
+  const [selectedElectionDetails, setSelectedElectionDetails] = useState(null)
+  const [officesList, setOfficesList] = useState([])
+  const [selectedOffice, setSelectedOffice] = useState(null)
+  const [candidatesList, setCandidatesList] = useState([])
+  const [selectedCandidate, setSelectedCandidate] = useState(null)
 
   // ----------------- Initialization -----------------
   useEffect(() => {
     const init = async () => {
       if (provider) {
         try {
-          
-          setLoading(true);
+          setLoading(true)
           // Create a BrowserProvider using the Web3Auth provider and chain id (e.g., Sepolia: 11155111)
-          const ethersProvider = new BrowserProvider(provider, 11155111);
-          ethersProvider.skipFetchAccounts = true;
+          const ethersProvider = new BrowserProvider(provider, 11155111)
+          ethersProvider.skipFetchAccounts = true
           // Manually fetch accounts
-          const accounts = await ethersProvider.send("eth_accounts", []);
+          const accounts = await ethersProvider.send("eth_accounts", [])
+          console.log(accounts)
           if (accounts.length) {
-            setAccount(accounts[0]);
+            setAccount(accounts[0])
             // Create a read-only contract instance
-            const contractRead = new ethers.Contract(
-              contractAddress,
-              contractABI.abi,
-              ethersProvider
-            );
+            const contractRead = new ethers.Contract(contractAddress, contractABI.abi, ethersProvider)
             // Check if the account has the VOTER_ROLE
-            const voterStatus = await contractRead.hasRole(
-              VOTER_ROLE,
-              accounts[0]
-            );
-            setIsVoter(voterStatus);
+            const voterStatus = await contractRead.hasRole(VOTER_ROLE, accounts[0])
+            setIsVoter(voterStatus)
             // Retrieve private key using the provider's request method (per Web3Auth instructions)
-            const pk = await provider.request({ method: "eth_private_key" });
-            console.log("Private key:", pk);
+            const pk = await provider.request({ method: "eth_private_key" })
             // Create a wallet signer from the private key
-            const walletSigner = new ethers.Wallet(pk, ethersProvider);
+            const walletSigner = new ethers.Wallet(pk, ethersProvider)
             // Create a writeable contract instance by connecting the signer
-            const contractWithSigner = contractRead.connect(walletSigner);
-            setVotingContract(contractWithSigner);
-            setVotingContractRead(contractRead);
+            const contractWithSigner = contractRead.connect(walletSigner)
+            setVotingContract(contractWithSigner)
+            setVotingContractRead(contractRead)
+
+            // Load initial data
+            handleViewElections()
           }
         } catch (error) {
-          console.error("Error initializing voter dashboard:", error);
-          setStatusMessage("Error initializing dashboard");
+          console.error("Error initializing voter dashboard:", error)
+          setStatusMessage("Error initializing dashboard")
         } finally {
-          console.log("hey");
           setLoading(false)
-          console.log(loading);
-          
-          console.log("hey");
-
         }
       }
-    };
-    init();
-  }, [provider]);
+    }
+    init()
+  }, [provider])
 
   // ----------------- Elections List Functions -----------------
   const handleViewElections = async () => {
-    if (!votingContractRead) return;
+    if (!votingContractRead) return
     try {
-      const countBN = await votingContractRead.electionCount();
-      const electionCount = Number(countBN.toString());
-      let list = [];
+      setLoading(true)
+      const countBN = await votingContractRead.electionCount()
+      const electionCount = Number(countBN.toString())
+      const list = []
       for (let i = 1; i <= electionCount; i++) {
-        const details = await votingContractRead.getElectionDetails(i);
+        const details = await votingContractRead.getElectionDetails(i)
         // details: [name, active, startTime, endTime, officeCount]
         list.push({
           id: i,
@@ -97,224 +88,317 @@ function VoterDashboard() {
           startTime: Number(details[2]),
           endTime: Number(details[3]),
           officeCount: Number(details[4]),
-        });
+        })
       }
-      setElectionsList(list);
-      setStatusMessage("Elections fetched successfully");
+      setElectionsList(list)
+      setStatusMessage("Elections fetched successfully")
     } catch (error) {
-      console.error(error);
-      setStatusMessage("Error fetching elections");
+      console.error(error)
+      setStatusMessage("Error fetching elections")
+    } finally {
+      setLoading(false)
     }
-  };
+  }
 
-  const handleSelectElection = (election) => {
-    setSelectedElectionId(election.id);
-    setSelectedElectionDetails(election);
-    setStatusMessage(`Election ${election.id} selected`);
-  };
+  const handleSelectElection = async (election) => {
+    setSelectedElectionId(election.id)
+    setSelectedElectionDetails(election)
+    setStatusMessage(`Election ${election.id} selected`)
+
+    // Reset office and candidate selections
+    setSelectedOffice(null)
+    setSelectedCandidate(null)
+
+    // Load offices for this election
+    try {
+      setLoading(true)
+      const offices = []
+      for (let i = 0; i < election.officeCount; i++) {
+        offices.push({
+          index: i,
+          name: `Office ${i + 1}`, // Using index+1 as name since contract doesn't store office names
+        })
+      }
+      setOfficesList(offices)
+    } catch (error) {
+      console.error(error)
+      setStatusMessage("Error loading offices")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSelectOffice = async (office) => {
+    setSelectedOffice(office)
+
+    // Load candidates for this office
+    try {
+      setLoading(true)
+      const candidates = await votingContractRead.getCandidates(selectedElectionId, office.index)
+      const candidatesList = candidates.map((candidate, index) => ({
+        index,
+        name: candidate.name,
+        voteCount: Number(candidate.voteCount),
+      }))
+      setCandidatesList(candidatesList)
+    } catch (error) {
+      console.error(error)
+      setStatusMessage("Error loading candidates")
+    } finally {
+      setLoading(false)
+    }
+  }
 
   // ----------------- Vote Casting Function -----------------
   const handleCastVote = async () => {
-    if (!votingContract || !selectedElectionId) return;
+    if (!votingContract || !selectedElectionId || !selectedOffice || selectedCandidate === null) return
     try {
-      const officeIdx = Number(officeIndex);
-      const candidateIdx = Number(candidateIndex);
-      const tx = await votingContract.vote(
-        selectedElectionId,
-        officeIdx,
-        candidateIdx
-      );
-      await tx.wait();
-      setStatusMessage("Vote cast successfully");
-    } catch (error) {
-      console.error(error);
-      setStatusMessage("Error casting vote");
-    }
-  };
+      setLoading(true)
+      const tx = await votingContract.vote(selectedElectionId, selectedOffice.index, selectedCandidate)
+      await tx.wait()
+      setStatusMessage("Vote cast successfully!")
 
-  // ----------------- Sidebar Component -----------------
-  const Sidebar = () => (
-    <div
-      style={{
-        width: "250px",
-        background: "#e8f0fe",
-        padding: "20px",
-        height: "100vh",
-      }}
-    >
-      <h3 style={{ color: "black" }}>Voter Dashboard</h3>
-      <ul style={{ listStyle: "none", padding: 0 }}>
-        <li
-          style={{
-            marginBottom: "10px",
-            cursor: "pointer",
-            color: currentSection === "elections" ? "blue" : "black",
-          }}
-          onClick={() => {
-            setCurrentSection("elections");
-            handleViewElections();
-          }}
-        >
-          Available Elections
-        </li>
-        <li
-          style={{
-            marginBottom: "10px",
-            cursor: "pointer",
-            color: currentSection === "vote" ? "blue" : "black",
-          }}
-          onClick={() => setCurrentSection("vote")}
-        >
-          Cast Vote
-        </li>
-        {/* You could add another item for Election Results if desired */}
-      </ul>
-    </div>
-  );
+      // Reset selections after voting
+      setSelectedCandidate(null)
+    } catch (error) {
+      console.error(error)
+      setStatusMessage("Error casting vote: " + error.message)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   // ----------------- Render Sections -----------------
-  const renderSection = () => {
-    switch (currentSection) {
-      case "elections":
-        return (
-          <div>
-            <h2>Available Elections</h2>
-            {electionsList.length > 0 ? (
-              <table
-                border="1"
-                cellPadding="8"
-                style={{ marginTop: "10px", width: "100%" }}
-              >
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>Name</th>
-                    <th>Active</th>
-                    <th>Start Time</th>
-                    <th>End Time</th>
-                    <th>Offices</th>
-                    <th>Select</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {electionsList.map((election) => (
-                    <tr key={election.id}>
-                      <td>{election.id}</td>
-                      <td>{election.name}</td>
-                      <td>{(election.active && (Date.now() / 1000) <= election.endTime) ? "Yes" : "No"}</td>
-                      <td>
-                        {new Date(election.startTime * 1000).toLocaleString()}
-                      </td>
-                      <td>
-                        {new Date(election.endTime * 1000).toLocaleString()}
-                      </td>
-                      <td>{election.officeCount}</td>
-                      <td>
-                        <button onClick={() => handleSelectElection(election)}>
-                          Select
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <p>No elections found.</p>
-            )}
-          </div>
-        );
-      case "vote":
-        return (
-          <div>
-            <h2>Cast Your Vote</h2>
-            {selectedElectionId ? (
-              <div>
-                <p>
-                  Selected Election ID: <strong>{selectedElectionId}</strong> -{" "}
-                  <strong>{selectedElectionDetails?.name}</strong>
-                </p>
-                <div>
-                  <label>
-                    Office Index:{" "}
-                    <input
-                      type="number"
-                      value={officeIndex}
-                      onChange={(e) => setOfficeIndex(e.target.value)}
-                    />
-                  </label>
-                </div>
-                <div>
-                  <label>
-                    Candidate Index:{" "}
-                    <input
-                      type="number"
-                      value={candidateIndex}
-                      onChange={(e) => setCandidateIndex(e.target.value)}
-                    />
-                  </label>
-                </div>
-                <button onClick={handleCastVote}>Cast Vote</button>
-              </div>
-            ) : (
-              <p>
-                Please select an election first from the Available Elections
-                section.
-              </p>
-            )}
-          </div>
-        );
-      default:
-        return <div>Select a section from the sidebar.</div>;
-    }
-  };
+  const renderElections = () => (
+    <div className="fade-in">
+      <h2>Available Elections</h2>
+      <button onClick={handleViewElections} className="mb-4">
+        Refresh Elections
+      </button>
 
-  if (loading || !account) {
+      {electionsList.length > 0 ? (
+        <div className="election-grid">
+          {electionsList.map((election) => (
+            <div key={election.id} className="election-card">
+              <div className="election-card-header">
+                <div className="election-card-title">{election.name}</div>
+                <span
+                  className={`election-card-status ${election.active && Date.now() / 1000 <= election.endTime ? "active" : "inactive"}`}
+                >
+                  {election.active && Date.now() / 1000 <= election.endTime ? "Active" : "Inactive"}
+                </span>
+              </div>
+              <div className="election-card-body">
+                <div className="election-card-info">
+                  <div className="election-card-info-item">
+                    <span className="election-card-info-label">ID:</span>
+                    <span className="election-card-info-value">{election.id}</span>
+                  </div>
+                  <div className="election-card-info-item">
+                    <span className="election-card-info-label">Start:</span>
+                    <span className="election-card-info-value">
+                      {new Date(election.startTime * 1000).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="election-card-info-item">
+                    <span className="election-card-info-label">End:</span>
+                    <span className="election-card-info-value">
+                      {new Date(election.endTime * 1000).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="election-card-info-item">
+                    <span className="election-card-info-label">Offices:</span>
+                    <span className="election-card-info-value">{election.officeCount}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="election-card-footer">
+                <button
+                  onClick={() => handleSelectElection(election)}
+                  disabled={!election.active || Date.now() / 1000 > election.endTime}
+                >
+                  {election.active && Date.now() / 1000 <= election.endTime ? "Select" : "Ended"}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="card">
+          <p>No elections found.</p>
+        </div>
+      )}
+    </div>
+  )
+
+  const renderVote = () => (
+    <div className="fade-in">
+      <h2>Cast Your Vote</h2>
+
+      {selectedElectionId ? (
+        <div className="card">
+          <h3>{selectedElectionDetails?.name}</h3>
+          <p>Election ends: {new Date(selectedElectionDetails?.endTime * 1000).toLocaleString()}</p>
+
+          {officesList.length > 0 ? (
+            <div className="mt-4">
+              <h4>Select an Office</h4>
+              <div className="form-group">
+                <select
+                  value={selectedOffice ? selectedOffice.index : ""}
+                  onChange={(e) => {
+                    const officeIndex = Number.parseInt(e.target.value)
+                    const office = officesList.find((o) => o.index === officeIndex)
+                    if (office) handleSelectOffice(office)
+                  }}
+                >
+                  <option value="">-- Select Office --</option>
+                  {officesList.map((office) => (
+                    <option key={office.index} value={office.index}>
+                      {office.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedOffice && (
+                <div className="mt-4">
+                  <h4>Select a Candidate</h4>
+                  {candidatesList.length > 0 ? (
+                    <div>
+                      {candidatesList.map((candidate, idx) => (
+                        <div
+                          key={idx}
+                          className={`candidate-option ${selectedCandidate === candidate.index ? "selected" : ""}`}
+                          onClick={() => setSelectedCandidate(candidate.index)}
+                        >
+                          <div className="candidate-option-header">
+                            <span className="candidate-option-name">{candidate.name}</span>
+                            {selectedCandidate === candidate.index && (
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="24"
+                                height="24"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                              </svg>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+
+                      <button onClick={handleCastVote} disabled={selectedCandidate === null} className="mt-4">
+                        Cast Vote
+                      </button>
+                    </div>
+                  ) : (
+                    <p>No candidates found for this office.</p>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <p>No offices available for this election.</p>
+          )}
+        </div>
+      ) : (
+        <div className="card">
+          <p>Please select an active election first.</p>
+        </div>
+      )}
+    </div>
+  )
+
+  if (loading && !account) {
     return (
-      <div style={{position: "fixed", top: 0, left: 0, background: "black", height: "100dvh", width: "100%", display: "flex", justifyContent: "center", alignItems: "center"}}>
-        <p className="">
-          Loading
-        </p>
+      <div className="loading-overlay">
+        <div className="loading-spinner"></div>
       </div>
     )
   }
 
   if (!loggedIn) {
     return (
-      <div style={{ padding: "20px" }}>
-        Please log in to access the voter dashboard.
+      <div className="container">
+        <div className="card text-center">
+          <h2>Access Denied</h2>
+          <p>Please log in to access the voter dashboard.</p>
+        </div>
       </div>
-    );
+    )
   }
-  // if (!account) {
-  //   return (
-  //     <div style={{ padding: "20px" }}>Loading account information...</div>
-  //   );
-  // }
+
   if (!isVoter) {
     return (
-      <div style={{ padding: "20px" }}>
-        Access denied. You are not a registered voter.
+      <div className="container">
+        <div className="card text-center">
+          <h2>Access Denied</h2>
+          <p>You are not a registered voter. Please contact an administrator to register.</p>
+        </div>
       </div>
-    );
+    )
   }
 
-  
-
   return (
-    <div
-      style={{
-        display: "flex",
-        minHeight: "100vh",
-        fontFamily: "Arial, sans-serif",
-      }}
-    >
-      <Sidebar />
-      <div style={{ flex: 1, padding: "20px" }}>
-        {statusMessage && <p style={{ color: "green" }}>{statusMessage}</p>}
-        {renderSection()}
+    <div className="dashboard">
+      <div className="sidebar">
+        <h3>Voter Dashboard</h3>
+        <ul className="sidebar-nav">
+          <li className="sidebar-nav-item">
+            <a
+              href="#"
+              className={`sidebar-nav-link ${currentSection === "elections" ? "active" : ""}`}
+              onClick={(e) => {
+                e.preventDefault()
+                setCurrentSection("elections")
+                handleViewElections()
+              }}
+            >
+              Available Elections
+            </a>
+          </li>
+          <li className="sidebar-nav-item">
+            <a
+              href="#"
+              className={`sidebar-nav-link ${currentSection === "vote" ? "active" : ""}`}
+              onClick={(e) => {
+                e.preventDefault()
+                setCurrentSection("vote")
+              }}
+            >
+              Cast Vote
+            </a>
+          </li>
+        </ul>
+      </div>
+
+      <div className="dashboard-content">
+        {statusMessage && (
+          <div className="card mb-4" style={{ padding: "0.75rem 1.5rem" }}>
+            <p style={{ margin: 0 }}>{statusMessage}</p>
+          </div>
+        )}
+
+        {loading ? (
+          <div className="card text-center">
+            <div className="spinner" style={{ margin: "0 auto" }}></div>
+            <p>Processing your request...</p>
+          </div>
+        ) : currentSection === "elections" ? (
+          renderElections()
+        ) : (
+          renderVote()
+        )}
       </div>
     </div>
-  );
+  )
 }
 
-export default VoterDashboard;
+export default VoterDashboard
+

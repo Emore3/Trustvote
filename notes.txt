@@ -8,6 +8,7 @@ changes to contract
 
 changes to frontend
 - User sees account info on dashboard
+-user shouldn't be able to create elections before the current date
 
 
 - setbacks
