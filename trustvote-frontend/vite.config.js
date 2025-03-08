@@ -1,9 +1,19 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import polyfillNode from 'vite-plugin-polyfill-node';
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    polyfillNode({
+      // These options ensure that Buffer and process are polyfilled globally
+      globals: {
+        Buffer: true,
+        process: true,
+      },
+    }),
+  ],
   // alias are only to be added when absolutely necessary, these modules are already present in the browser environment
   // resolve: {
   // alias: {
