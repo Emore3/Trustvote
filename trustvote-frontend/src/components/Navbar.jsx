@@ -1,10 +1,45 @@
+"use client"
+
 import { Link, useLocation } from "react-router-dom"
 import { useWeb3Auth } from "../Web3AuthContext"
 import ThemeToggle from "./ThemeToggle"
+import { useState, useEffect } from "react"
+import { ethers, BrowserProvider } from "ethers"
+import { keccak256, toUtf8Bytes } from "ethers"
+import contractABI from "../abis/VotingSystem.json"
+
+const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS
+const ADMIN_ROLE = keccak256(toUtf8Bytes("ADMIN_ROLE"))
 
 function Navbar() {
   const location = useLocation()
-  const { loggedIn, logout } = useWeb3Auth()
+  const { loggedIn, logout, provider } = useWeb3Auth()
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      if (provider && loggedIn) {
+        try {
+          const ethersProvider = new BrowserProvider(provider, 11155111)
+          ethersProvider.skipFetchAccounts = true
+          const accounts = await ethersProvider.send("eth_accounts", [])
+
+          if (accounts.length) {
+            const contractRead = new ethers.Contract(contractAddress, contractABI.abi, ethersProvider)
+            const adminStatus = await contractRead.hasRole(ADMIN_ROLE, accounts[0])
+            setIsAdmin(adminStatus)
+          }
+        } catch (error) {
+          console.error("Error checking admin status:", error)
+          setIsAdmin(false)
+        }
+      } else {
+        setIsAdmin(false)
+      }
+    }
+
+    checkAdminStatus()
+  }, [provider, loggedIn])
 
   const isActive = (path) => {
     return location.pathname === path ? "navbar-link active" : "navbar-link"
@@ -38,9 +73,11 @@ function Navbar() {
         <Link to="/" className={isActive("/")}>
           Home
         </Link>
-        <Link to="/admin" className={isActive("/admin")}>
-          Admin
-        </Link>
+        {isAdmin && (
+          <Link to="/admin" className={isActive("/admin")}>
+            Admin
+          </Link>
+        )}
         <Link to="/voter" className={isActive("/voter")}>
           Vote
         </Link>

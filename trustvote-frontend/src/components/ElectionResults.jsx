@@ -195,7 +195,7 @@ function ElectionResults() {
               <div className="card">
                 <h2>Results: {selectedElectionDetails.name}</h2>
                 <p>
-                  Election {selectedElectionDetails.active ? "is active" : "has ended"} •
+                  Election {selectedElectionDetails.active && Date.now() / 1000 <= selectedElectionDetails.endTime ? "is active" : "has ended"} •
                   {selectedElectionDetails.active && Date.now() / 1000 <= selectedElectionDetails.endTime
                     ? " Results are preliminary"
                     : " Final results"}
