@@ -49,6 +49,10 @@ export const Web3AuthProvider = ({ children }) => {
     const web3authProvider = await web3auth.connect();
     setProvider(web3authProvider);
     if (web3auth.connected) {
+      const userInfo = await web3auth.getUserInfo();
+      console.log(userInfo);
+      const accounts = await provider.request({ method: 'eth_accounts' });
+      console.log(accounts[0]); // This is the wallet address
       setLoggedIn(true);
     }
   };
