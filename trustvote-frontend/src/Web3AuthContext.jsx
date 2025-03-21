@@ -8,7 +8,7 @@ const clientId = import.meta.env.VITE_WEB3AUTH_CLIENT_ID;
 const chainConfig = {
   chainNamespace: CHAIN_NAMESPACES.EIP155,
   chainId: "0xaa36a7",
-  rpcTarget: "https://rpc.ankr.com/eth_sepolia",
+  rpcTarget: import.meta.env.VITE_RPC_TARGET,
   displayName: "Ethereum Sepolia Testnet",
   blockExplorerUrl: "https://sepolia.etherscan.io",
   ticker: "ETH",
@@ -49,10 +49,10 @@ export const Web3AuthProvider = ({ children }) => {
     const web3authProvider = await web3auth.connect();
     setProvider(web3authProvider);
     if (web3auth.connected) {
-      const userInfo = await web3auth.getUserInfo();
-      console.log(userInfo);
-      const accounts = await provider.request({ method: 'eth_accounts' });
-      console.log(accounts[0]); // This is the wallet address
+      // const userInfo = await web3auth.getUserInfo();
+      // console.log(userInfo);
+      // const accounts = await provider.request({ method: 'eth_accounts' });
+      // console.log(accounts[0]); // This is the wallet address
       setLoggedIn(true);
     }
   };

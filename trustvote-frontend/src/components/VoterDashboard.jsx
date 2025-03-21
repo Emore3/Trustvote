@@ -162,7 +162,7 @@ function VoterDashboard() {
       setSelectedCandidate(null)
     } catch (error) {
       console.error(error)
-      setStatusMessage("Error casting vote: " + error.message)
+      setStatusMessage('Error casting vote: ' + error.message.split(" (")[0])
     } finally {
       setLoading(false)
     }

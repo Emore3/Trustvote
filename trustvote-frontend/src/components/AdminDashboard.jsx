@@ -1,104 +1,124 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { ethers, BrowserProvider } from "ethers"
-import { keccak256, toUtf8Bytes } from "ethers"
-import contractABI from "../abis/VotingSystem.json"
-import { useWeb3Auth } from "../Web3AuthContext"
+import { useState, useEffect } from "react";
+import { ethers, BrowserProvider } from "ethers";
+import { keccak256, toUtf8Bytes } from "ethers";
+import contractABI from "../abis/VotingSystem.json";
+import { useWeb3Auth } from "../Web3AuthContext";
 
-const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS
-const ADMIN_ROLE = keccak256(toUtf8Bytes("ADMIN_ROLE"))
+const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS;
+const ADMIN_ROLE = keccak256(toUtf8Bytes("ADMIN_ROLE"));
 
 function AdminDashboard() {
   // Common states
-  const { provider, loggedIn } = useWeb3Auth()
-  const [account, setAccount] = useState(null)
-  const [votingContract, setVotingContract] = useState(null) // Writeable instance
-  const [votingContractRead, setVotingContractRead] = useState(null) // Read-only instance
-  const [statusMessage, setStatusMessage] = useState("")
-  const [isAdmin, setIsAdmin] = useState(false)
-  const [currentSection, setCurrentSection] = useState("dashboard")
-  const [loading, setLoading] = useState(false)
+  const { provider, loggedIn } = useWeb3Auth();
+  const [account, setAccount] = useState(null);
+  const [votingContract, setVotingContract] = useState(null); // Writeable instance
+  const [votingContractRead, setVotingContractRead] = useState(null); // Read-only instance
+  const [statusMessage, setStatusMessage] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [currentSection, setCurrentSection] = useState("dashboard");
+  const [loading, setLoading] = useState(false);
 
   // For elections list and selection
-  const [electionsList, setElectionsList] = useState([])
-  const [selectedElectionId, setSelectedElectionId] = useState(null)
-  const [selectedElectionDetails, setSelectedElectionDetails] = useState(null)
+  const [electionsList, setElectionsList] = useState([]);
+  const [selectedElectionId, setSelectedElectionId] = useState(null);
+  const [selectedElectionDetails, setSelectedElectionDetails] = useState(null);
 
   // States for Admin management
-  const [newAdmin, setNewAdmin] = useState("")
-  const [adminsList, setAdminsList] = useState([])
+  const [newAdmin, setNewAdmin] = useState("");
+  const [adminsList, setAdminsList] = useState([]);
 
   // States for Voter management
-  const [newVoter, setNewVoter] = useState("")
-  const [votersList, setVotersList] = useState([])
+  const [newVoter, setNewVoter] = useState("");
+  const [votersList, setVotersList] = useState([]);
 
   // States for Election management (for creating new election)
-  const [newElectionName, setNewElectionName] = useState("")
-  const [newElectionStartTime, setNewElectionStartTime] = useState("")
-  const [newElectionEndTime, setNewElectionEndTime] = useState("")
+  const [newElectionName, setNewElectionName] = useState("");
+  const [newElectionStartTime, setNewElectionStartTime] = useState("");
+  const [newElectionEndTime, setNewElectionEndTime] = useState("");
 
   // States for Election management (for updating selected election)
-  const [updateElectionName, setUpdateElectionName] = useState("")
-  const [updateElectionStartTime, setUpdateElectionStartTime] = useState("")
-  const [updateElectionEndTime, setUpdateElectionEndTime] = useState("")
+  const [updateElectionName, setUpdateElectionName] = useState("");
+  const [updateElectionStartTime, setUpdateElectionStartTime] = useState("");
+  const [updateElectionEndTime, setUpdateElectionEndTime] = useState("");
 
   // States for Office & Candidate management (using selected election)
-  const [officeName, setOfficeName] = useState("")
-  const [candidateName, setCandidateName] = useState("")
-  const [officeIndex, setOfficeIndex] = useState("") // if needed for candidate operations
+  const [officeName, setOfficeName] = useState("");
+  const [candidateName, setCandidateName] = useState("");
+  const [officeIndex, setOfficeIndex] = useState(""); // if needed for candidate operations
 
   // ----------------- Initialization -----------------
   useEffect(() => {
     const init = async () => {
       if (provider) {
         try {
-          setLoading(true)
+          setLoading(true);
           // Create BrowserProvider with chain id (e.g., Sepolia: 11155111)
-          const ethersProvider = new BrowserProvider(provider, 11155111)
-          ethersProvider.skipFetchAccounts = true
+          const ethersProvider = new BrowserProvider(provider, 11155111);
+          ethersProvider.skipFetchAccounts = true;
           // Manually fetch accounts using "eth_accounts"
-          const accounts = await ethersProvider.send("eth_accounts", [])
+          const accounts = await ethersProvider.send("eth_accounts", []);
           if (accounts.length) {
-            setAccount(accounts[0])
+            setAccount(accounts[0]);
             // Create read-only contract instance using ethersProvider
-            const contractRead = new ethers.Contract(contractAddress, contractABI.abi, ethersProvider)
+            const contractRead = new ethers.Contract(
+              contractAddress,
+              contractABI.abi,
+              ethersProvider
+            );
             // Check if connected account has ADMIN_ROLE
-            const adminStatus = await contractRead.hasRole(ADMIN_ROLE, accounts[0])
-            setIsAdmin(adminStatus)
+            const adminStatus = await contractRead.hasRole(
+              ADMIN_ROLE,
+              accounts[0]
+            );
+            setIsAdmin(adminStatus);
             // Retrieve private key via provider (as recommended by Web3Auth)
-            const pk = await provider.request({ method: "eth_private_key" })
+            const pk = await provider.request({ method: "eth_private_key" });
             // Create a Wallet signer using the private key and ethersProvider
-            const walletSigner = new ethers.Wallet(pk, ethersProvider)
+            const walletSigner = new ethers.Wallet(pk, ethersProvider);
             // Create writeable contract instance by connecting the signer
-            const contractWithSigner = contractRead.connect(walletSigner)
-            setVotingContract(contractWithSigner)
-            setVotingContractRead(contractRead)
+            // const contractWithSigner = contractRead.connect(walletSigner)
+            const contractWithSigner = new ethers.Contract(
+              contractAddress,
+              contractABI.abi,
+              walletSigner
+            );
+            setVotingContract(contractWithSigner);
+            setVotingContractRead(contractRead);
 
             // Load initial data
-            handleViewElections()
+            handleViewElections();
+            renderDashboard();
           }
         } catch (error) {
-          console.error("Error initializing admin dashboard:", error)
-          setStatusMessage("Error initializing dashboard")
+          console.error("Error initializing admin dashboard:", error);
+          setStatusMessage("Error initializing dashboard");
         } finally {
-          setLoading(false)
+          setLoading(false);
         }
       }
-    }
-    init()
-  }, [provider])
+    };
+    init();
+  }, [provider]);
+
+  useEffect(() => {
+    console.log("i ran")
+    renderDashboard()
+    console.log("i ran 2")
+  }, []);
 
   // ----------------- Elections List Functions -----------------
   const handleViewElections = async () => {
-    if (!votingContractRead) return
+    console.log("i ran 3")
+    if (!votingContractRead) return;
     try {
-      setLoading(true)
-      const countBN = await votingContractRead.electionCount()
-      const electionCount = Number(countBN.toString())
-      const list = []
+      setLoading(true);
+      const countBN = await votingContractRead.electionCount();
+      const electionCount = Number(countBN.toString());
+      const list = [];
       for (let i = 1; i <= electionCount; i++) {
-        const details = await votingContractRead.getElectionDetails(i)
+        const details = await votingContractRead.getElectionDetails(i);
         // details: [name, active, startTime, endTime, officeCount]
         list.push({
           id: i,
@@ -107,214 +127,237 @@ function AdminDashboard() {
           startTime: Number(details[2]),
           endTime: Number(details[3]),
           officeCount: Number(details[4]),
-        })
+        });
       }
-      setElectionsList(list)
-      setStatusMessage("Elections fetched successfully")
+      setElectionsList(list);
+      setStatusMessage("Elections fetched successfully");
     } catch (error) {
-      console.error(error)
-      setStatusMessage("Error fetching elections")
+      console.error(error);
+      setStatusMessage("Error fetching elections");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleSelectElection = async (election) => {
-    setSelectedElectionId(election.id)
-    setSelectedElectionDetails(election)
+    setSelectedElectionId(election.id);
+    setSelectedElectionDetails(election);
     // Pre-fill update fields with current details (convert timestamps to datetime-local format)
-    const startDate = new Date(election.startTime * 1000).toISOString().slice(0, 16)
-    const endDate = new Date(election.endTime * 1000).toISOString().slice(0, 16)
-    setUpdateElectionName(election.name)
-    setUpdateElectionStartTime(startDate)
-    setUpdateElectionEndTime(endDate)
-  }
+    const startDate = new Date(election.startTime * 1000)
+      .toISOString()
+      .slice(0, 16);
+    const endDate = new Date(election.endTime * 1000)
+      .toISOString()
+      .slice(0, 16);
+    setUpdateElectionName(election.name);
+    setUpdateElectionStartTime(startDate);
+    setUpdateElectionEndTime(endDate);
+  };
 
   // ----------------- Admin CRUD Functions -----------------
   const handleAddAdmin = async () => {
-    if (!votingContract) return
+    if (!votingContract) return;
     try {
-      setLoading(true)
-      const tx = await votingContract.addAdmin(newAdmin)
-      await tx.wait()
-      setStatusMessage("Admin added successfully")
-      setNewAdmin("")
-      handleViewAdmins()
+      setLoading(true);
+      const tx = await votingContract.addAdmin(newAdmin);
+      await tx.wait();
+      setStatusMessage("Admin added successfully");
+      setNewAdmin("");
+      handleViewAdmins();
     } catch (error) {
-      console.error(error)
-      setStatusMessage("Error adding admin")
+      console.error(error);
+      setStatusMessage("Error adding admin");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleViewAdmins = async () => {
-    if (!votingContractRead) return
+    if (!votingContractRead) return;
     try {
-      setLoading(true)
-      const admins = await votingContractRead.viewAdmins()
-      setAdminsList(admins)
-      setStatusMessage("Admins fetched successfully")
+      setLoading(true);
+      const admins = await votingContractRead.viewAdmins();
+      setAdminsList(admins);
+      setStatusMessage("Admins fetched successfully");
     } catch (error) {
-      console.error(error)
-      setStatusMessage("Error fetching admins")
+      console.error(error);
+      setStatusMessage("Error fetching admins");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   // ----------------- Voter CRUD Functions -----------------
   const handleRegisterVoter = async () => {
-    if (!votingContract) return
+    if (!votingContract) return;
     try {
-      setLoading(true)
-      const tx = await votingContract.registerVoter(newVoter)
-      await tx.wait()
-      setStatusMessage("Voter registered successfully")
-      setNewVoter("")
-      handleViewVoters()
+      setLoading(true);
+      const tx = await votingContract.registerVoter(newVoter);
+      await tx.wait();
+      setStatusMessage("Voter registered successfully");
+      setNewVoter("");
+      handleViewVoters();
     } catch (error) {
-      console.error(error)
-      setStatusMessage("Error registering voter")
+      console.error(error);
+      setStatusMessage("Error registering voter");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleViewVoters = async () => {
-    if (!votingContractRead) return
+    if (!votingContractRead) return;
     try {
-      setLoading(true)
-      const voters = await votingContractRead.viewVoters()
-      setVotersList(voters)
-      setStatusMessage("Voters fetched successfully")
+      setLoading(true);
+      const voters = await votingContractRead.viewVoters();
+      setVotersList(voters);
+      setStatusMessage("Voters fetched successfully");
     } catch (error) {
-      console.error(error)
-      setStatusMessage("Error fetching voters")
+      console.error(error);
+      setStatusMessage("Error fetching voters");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   // ----------------- Election CRUD Functions -----------------
   const handleCreateElection = async () => {
-    if (!votingContract) return
+    if (!votingContract) return;
     try {
-      setLoading(true)
+      setLoading(true);
       // Convert datetime-local strings to Unix timestamps (in seconds)
-      const start = Math.floor(new Date(newElectionStartTime).getTime() / 1000)
-      const end = Math.floor(new Date(newElectionEndTime).getTime() / 1000)
-      const tx = await votingContract.createElection(newElectionName, start, end)
-      await tx.wait()
-      setStatusMessage("Election created successfully")
-      setNewElectionName("")
-      setNewElectionStartTime("")
-      setNewElectionEndTime("")
-      handleViewElections()
+      const start = Math.floor(new Date(newElectionStartTime).getTime() / 1000);
+      const end = Math.floor(new Date(newElectionEndTime).getTime() / 1000);
+      const tx = await votingContract.createElection(
+        newElectionName,
+        start,
+        end
+      );
+      await tx.wait();
+      setStatusMessage("Election created successfully");
+      setNewElectionName("");
+      setNewElectionStartTime("");
+      setNewElectionEndTime("");
+      handleViewElections();
     } catch (error) {
-      console.error(error)
-      setStatusMessage("Error creating election")
+      console.error(error);
+      setStatusMessage("Error creating election");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleUpdateElection = async () => {
-    if (!votingContract || !selectedElectionId) return
+    if (!votingContract || !selectedElectionId) return;
     try {
-      setLoading(true)
+      setLoading(true);
       // Convert datetime-local strings to Unix timestamps (in seconds)
-      const start = Math.floor(new Date(updateElectionStartTime).getTime() / 1000)
-      const end = Math.floor(new Date(updateElectionEndTime).getTime() / 1000)
-      const tx = await votingContract.updateElection(selectedElectionId, updateElectionName, start, end)
-      await tx.wait()
-      setStatusMessage("Election updated successfully")
-      handleViewElections()
+      const start = Math.floor(
+        new Date(updateElectionStartTime).getTime() / 1000
+      );
+      const end = Math.floor(new Date(updateElectionEndTime).getTime() / 1000);
+      const tx = await votingContract.updateElection(
+        selectedElectionId,
+        updateElectionName,
+        start,
+        end
+      );
+      await tx.wait();
+      setStatusMessage("Election updated successfully");
+      handleViewElections();
     } catch (error) {
-      console.error(error)
-      setStatusMessage("Error updating election")
+      console.error(error);
+      setStatusMessage("Error updating election");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleDeleteElection = async () => {
-    if (!votingContract || !selectedElectionId) return
+    if (!votingContract || !selectedElectionId) return;
     try {
-      setLoading(true)
-      const tx = await votingContract.deleteElection(selectedElectionId)
-      await tx.wait()
-      setStatusMessage("Election deleted successfully")
-      setSelectedElectionId(null)
-      setSelectedElectionDetails(null)
-      handleViewElections()
+      setLoading(true);
+      const tx = await votingContract.deleteElection(selectedElectionId);
+      await tx.wait();
+      setStatusMessage("Election deleted successfully");
+      setSelectedElectionId(null);
+      setSelectedElectionDetails(null);
+      handleViewElections();
     } catch (error) {
-      console.error(error)
-      setStatusMessage("Error deleting election")
+      console.error(error);
+      setStatusMessage("Error deleting election");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleEndElection = async () => {
-    if (!votingContract || !selectedElectionId) return
+    if (!votingContract || !selectedElectionId) return;
     try {
-      setLoading(true)
-      const tx = await votingContract.endElection(selectedElectionId)
-      await tx.wait()
-      setStatusMessage("Election ended successfully")
-      handleViewElections()
+      setLoading(true);
+      const tx = await votingContract.endElection(selectedElectionId);
+      await tx.wait();
+      setStatusMessage("Election ended successfully");
+      handleViewElections();
     } catch (error) {
-      console.error(error)
-      setStatusMessage("Error ending election")
+      console.error(error);
+      setStatusMessage("Error ending election");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   // ----------------- Office & Candidate CRUD Functions -----------------
   const handleAddOffice = async () => {
-    if (!votingContract || !selectedElectionId) return
+    if (!votingContract || !selectedElectionId) return;
     try {
-      setLoading(true)
-      const tx = await votingContract.addOffice(selectedElectionId, officeName)
-      await tx.wait()
-      setStatusMessage("Office added successfully")
-      setOfficeName("")
+      setLoading(true);
+      const tx = await votingContract.addOffice(selectedElectionId, officeName);
+      await tx.wait();
+      setStatusMessage("Office added successfully");
+      setOfficeName("");
       // Refresh selected election details
-      handleViewElections()
+      handleViewElections();
     } catch (error) {
-      console.error(error)
-      setStatusMessage("Error adding office")
+      console.error(error);
+      setStatusMessage("Error adding office");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleAddCandidate = async () => {
-    if (!votingContract || !selectedElectionId) return
+    if (!votingContract || !selectedElectionId) return;
     try {
-      setLoading(true)
-      const officeIdx = Number(officeIndex)
-      const tx = await votingContract.addCandidate(selectedElectionId, officeIdx, candidateName)
-      await tx.wait()
-      setStatusMessage("Candidate added successfully")
-      setCandidateName("")
+      setLoading(true);
+      const officeIdx = Number(officeIndex);
+      const tx = await votingContract.addCandidate(
+        selectedElectionId,
+        officeIdx,
+        candidateName
+      );
+      await tx.wait();
+      setStatusMessage("Candidate added successfully");
+      setCandidateName("");
     } catch (error) {
-      console.error(error)
-      setStatusMessage("Error adding candidate")
+      console.error(error);
+      setStatusMessage("Error adding candidate");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   // ----------------- Render Sections -----------------
   const renderDashboard = () => (
     <div className="fade-in">
       <h2>Admin Dashboard</h2>
       <p className="mb-4">
-        Welcome, {account && `${account.substring(0, 6)}...${account.substring(account.length - 4)}`}. You are{" "}
-        {isAdmin ? "an admin" : "not an admin"}.
+        Welcome,{" "}
+        {account &&
+          `${account.substring(0, 6)}...${account.substring(
+            account.length - 4
+          )}`}
+        . You are {isAdmin ? "an admin" : "not an admin"}.
       </p>
 
       <div className="stats-grid">
@@ -324,7 +367,11 @@ function AdminDashboard() {
         </div>
         <div className="stat-card">
           <div className="stat-value">
-            {electionsList.filter((e) => e.active && Date.now() / 1000 <= e.endTime).length}
+            {
+              electionsList.filter(
+                (e) => e.active && Date.now() / 1000 <= e.endTime
+              ).length
+            }
           </div>
           <div className="stat-label">Active Elections</div>
         </div>
@@ -351,16 +398,24 @@ function AdminDashboard() {
                 <div className="election-card-header">
                   <div className="election-card-title">{election.name}</div>
                   <span
-                    className={`election-card-status ${election.active && Date.now() / 1000 <= election.endTime ? "active" : "inactive"}`}
+                    className={`election-card-status ${
+                      election.active && Date.now() / 1000 <= election.endTime
+                        ? "active"
+                        : "inactive"
+                    }`}
                   >
-                    {election.active && Date.now() / 1000 <= election.endTime ? "Active" : "Inactive"}
+                    {election.active && Date.now() / 1000 <= election.endTime
+                      ? "Active"
+                      : "Inactive"}
                   </span>
                 </div>
                 <div className="election-card-body">
                   <div className="election-card-info">
                     <div className="election-card-info-item">
                       <span className="election-card-info-label">ID:</span>
-                      <span className="election-card-info-value">{election.id}</span>
+                      <span className="election-card-info-value">
+                        {election.id}
+                      </span>
                     </div>
                     <div className="election-card-info-item">
                       <span className="election-card-info-label">Start:</span>
@@ -376,12 +431,16 @@ function AdminDashboard() {
                     </div>
                     <div className="election-card-info-item">
                       <span className="election-card-info-label">Offices:</span>
-                      <span className="election-card-info-value">{election.officeCount}</span>
+                      <span className="election-card-info-value">
+                        {election.officeCount}
+                      </span>
                     </div>
                   </div>
                 </div>
                 <div className="election-card-footer">
-                  <button onClick={() => handleSelectElection(election)}>Manage</button>
+                  <button onClick={() => handleSelectElection(election)}>
+                    Manage
+                  </button>
                 </div>
               </div>
             ))}
@@ -391,7 +450,7 @@ function AdminDashboard() {
         )}
       </div>
     </div>
-  )
+  );
 
   const renderAdminManagement = () => (
     <div className="fade-in">
@@ -429,14 +488,19 @@ function AdminDashboard() {
         <h3>Add New Admin</h3>
         <div className="form-group">
           <label className="form-label">Admin Address</label>
-          <input type="text" placeholder="0x..." value={newAdmin} onChange={(e) => setNewAdmin(e.target.value)} />
+          <input
+            type="text"
+            placeholder="0x..."
+            value={newAdmin}
+            onChange={(e) => setNewAdmin(e.target.value)}
+          />
         </div>
         <button onClick={handleAddAdmin} disabled={!newAdmin}>
           Add Admin
         </button>
       </div>
     </div>
-  )
+  );
 
   const renderVoterManagement = () => (
     <div className="fade-in">
@@ -474,14 +538,19 @@ function AdminDashboard() {
         <h3>Register New Voter</h3>
         <div className="form-group">
           <label className="form-label">Voter Address</label>
-          <input type="text" placeholder="0x..." value={newVoter} onChange={(e) => setNewVoter(e.target.value)} />
+          <input
+            type="text"
+            placeholder="0x..."
+            value={newVoter}
+            onChange={(e) => setNewVoter(e.target.value)}
+          />
         </div>
         <button onClick={handleRegisterVoter} disabled={!newVoter}>
           Register Voter
         </button>
       </div>
     </div>
-  )
+  );
 
   const renderElectionManagement = () => (
     <div className="fade-in">
@@ -518,7 +587,9 @@ function AdminDashboard() {
         </div>
         <button
           onClick={handleCreateElection}
-          disabled={!newElectionName || !newElectionStartTime || !newElectionEndTime}
+          disabled={
+            !newElectionName || !newElectionStartTime || !newElectionEndTime
+          }
           className="mt-4"
         >
           Create Election
@@ -530,7 +601,11 @@ function AdminDashboard() {
           <h3>Update Election: {selectedElectionDetails?.name}</h3>
           <div className="form-group">
             <label className="form-label">Election Name</label>
-            <input type="text" value={updateElectionName} onChange={(e) => setUpdateElectionName(e.target.value)} />
+            <input
+              type="text"
+              value={updateElectionName}
+              onChange={(e) => setUpdateElectionName(e.target.value)}
+            />
           </div>
           <div className="form-row">
             <div className="form-col">
@@ -555,7 +630,10 @@ function AdminDashboard() {
             <button onClick={handleEndElection} className="btn-secondary">
               End Election
             </button>
-            <button onClick={handleDeleteElection} style={{ backgroundColor: "var(--danger)" }}>
+            <button
+              onClick={handleDeleteElection}
+              style={{ backgroundColor: "var(--danger)" }}
+            >
               Delete Election
             </button>
           </div>
@@ -566,7 +644,7 @@ function AdminDashboard() {
         </div>
       )}
     </div>
-  )
+  );
 
   const renderOfficeCandidateManagement = () => (
     <div className="fade-in">
@@ -612,7 +690,11 @@ function AdminDashboard() {
                 />
               </div>
             </div>
-            <button onClick={handleAddCandidate} disabled={officeIndex === "" || !candidateName} className="mt-4">
+            <button
+              onClick={handleAddCandidate}
+              disabled={officeIndex === "" || !candidateName}
+              className="mt-4"
+            >
               Add Candidate
             </button>
           </div>
@@ -623,24 +705,24 @@ function AdminDashboard() {
         </div>
       )}
     </div>
-  )
+  );
 
   const renderSection = () => {
     switch (currentSection) {
       case "dashboard":
-        return renderDashboard()
+        return renderDashboard();
       case "admin":
-        return renderAdminManagement()
+        return renderAdminManagement();
       case "voter":
-        return renderVoterManagement()
+        return renderVoterManagement();
       case "election":
-        return renderElectionManagement()
+        return renderElectionManagement();
       case "officeCandidate":
-        return renderOfficeCandidateManagement()
+        return renderOfficeCandidateManagement();
       default:
-        return <div>Select a section from the sidebar.</div>
+        return <div>Select a section from the sidebar.</div>;
     }
-  }
+  };
 
   if (!loggedIn) {
     return (
@@ -650,7 +732,7 @@ function AdminDashboard() {
           <p>Please log in to access the admin dashboard.</p>
         </div>
       </div>
-    )
+    );
   }
 
   if (!account) {
@@ -662,7 +744,7 @@ function AdminDashboard() {
           <p>Loading account information...</p>
         </div>
       </div>
-    )
+    );
   }
 
   if (!isAdmin) {
@@ -673,7 +755,7 @@ function AdminDashboard() {
           <p>You do not have admin privileges.</p>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -684,13 +766,15 @@ function AdminDashboard() {
           <li className="sidebar-nav-item">
             <a
               href="#"
-              className={`sidebar-nav-link ${currentSection === "dashboard" ? "active" : ""}`}
+              className={`sidebar-nav-link ${
+                currentSection === "dashboard" ? "active" : ""
+              }`}
               onClick={(e) => {
-                e.preventDefault()
-                setCurrentSection("dashboard")
-                handleViewElections()
-                handleViewAdmins()
-                handleViewVoters()
+                e.preventDefault();
+                setCurrentSection("dashboard");
+                handleViewElections();
+                handleViewAdmins();
+                handleViewVoters();
               }}
             >
               Dashboard
@@ -699,11 +783,13 @@ function AdminDashboard() {
           <li className="sidebar-nav-item">
             <a
               href="#"
-              className={`sidebar-nav-link ${currentSection === "admin" ? "active" : ""}`}
+              className={`sidebar-nav-link ${
+                currentSection === "admin" ? "active" : ""
+              }`}
               onClick={(e) => {
-                e.preventDefault()
-                setCurrentSection("admin")
-                handleViewAdmins()
+                e.preventDefault();
+                setCurrentSection("admin");
+                handleViewAdmins();
               }}
             >
               Admin Management
@@ -712,11 +798,13 @@ function AdminDashboard() {
           <li className="sidebar-nav-item">
             <a
               href="#"
-              className={`sidebar-nav-link ${currentSection === "voter" ? "active" : ""}`}
+              className={`sidebar-nav-link ${
+                currentSection === "voter" ? "active" : ""
+              }`}
               onClick={(e) => {
-                e.preventDefault()
-                setCurrentSection("voter")
-                handleViewVoters()
+                e.preventDefault();
+                setCurrentSection("voter");
+                handleViewVoters();
               }}
             >
               Voter Management
@@ -725,10 +813,12 @@ function AdminDashboard() {
           <li className="sidebar-nav-item">
             <a
               href="#"
-              className={`sidebar-nav-link ${currentSection === "election" ? "active" : ""}`}
+              className={`sidebar-nav-link ${
+                currentSection === "election" ? "active" : ""
+              }`}
               onClick={(e) => {
-                e.preventDefault()
-                setCurrentSection("election")
+                e.preventDefault();
+                setCurrentSection("election");
               }}
             >
               Elections
@@ -737,10 +827,12 @@ function AdminDashboard() {
           <li className="sidebar-nav-item">
             <a
               href="#"
-              className={`sidebar-nav-link ${currentSection === "officeCandidate" ? "active" : ""}`}
+              className={`sidebar-nav-link ${
+                currentSection === "officeCandidate" ? "active" : ""
+              }`}
               onClick={(e) => {
-                e.preventDefault()
-                setCurrentSection("officeCandidate")
+                e.preventDefault();
+                setCurrentSection("officeCandidate");
               }}
             >
               Offices & Candidates
@@ -766,8 +858,7 @@ function AdminDashboard() {
         )}
       </div>
     </div>
-  )
+  );
 }
 
-export default AdminDashboard
-
+export default AdminDashboard;
