@@ -46,16 +46,38 @@ export const Web3AuthProvider = ({ children }) => {
   }, []);
 
   const login = async () => {
-    const web3authProvider = await web3auth.connect();
-    setProvider(web3authProvider);
-    if (web3auth.connected) {
-      // const userInfo = await web3auth.getUserInfo();
-      // console.log(userInfo);
-      // const accounts = await provider.request({ method: 'eth_accounts' });
-      // console.log(accounts[0]); // This is the wallet address
-      setLoggedIn(true);
+    try {
+      const web3authProvider = await web3auth.connect();
+      setProvider(web3authProvider);
+  
+      if (web3auth.connected) {
+        // Get wallet address
+        const accounts = await web3authProvider.request({ method: 'eth_accounts' });
+        const walletAddress = accounts[0];
+  
+        // Send wallet address to backend
+        const response = await fetch('https://trustvote-backend.onrender.com/api/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ walletAddress: walletAddress }), // Sending wallet address
+        });
+  
+        const data = await response.json();
+        console.log('Login Response:', data);
+  
+        if (response.ok) {
+          setLoggedIn(true);
+        } else {
+          console.error('Login Failed:', data);
+        }
+      }
+    } catch (error) {
+      console.error('Error during login:', error);
     }
   };
+  
 
   const logout = async () => {
     await web3auth.logout();
