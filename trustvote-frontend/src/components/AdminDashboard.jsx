@@ -87,9 +87,6 @@ function AdminDashboard() {
             setVotingContract(contractWithSigner);
             setVotingContractRead(contractRead);
 
-            // Load initial data
-            handleViewElections();
-            renderDashboard();
           }
         } catch (error) {
           console.error("Error initializing admin dashboard:", error);
@@ -103,10 +100,14 @@ function AdminDashboard() {
   }, [provider]);
 
   useEffect(() => {
-    console.log("i ran")
-    renderDashboard()
-    console.log("i ran 2")
-  }, []);
+    // Only fetch elections when votingContractRead is set
+    // and we know we have an admin (isAdmin) or at least an account
+    if (votingContractRead && isAdmin) {
+      handleViewElections();
+      handleViewAdmins();
+      handleViewVoters();
+    }
+  }, [votingContractRead, isAdmin]);
 
   // ----------------- Elections List Functions -----------------
   const handleViewElections = async () => {

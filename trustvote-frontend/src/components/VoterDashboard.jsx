@@ -57,7 +57,7 @@ function VoterDashboard() {
             setVotingContractRead(contractRead)
 
             // Load initial data
-            handleViewElections()
+            // await handleViewElections()
           }
         } catch (error) {
           console.error("Error initializing voter dashboard:", error)
@@ -69,6 +69,13 @@ function VoterDashboard() {
     }
     init()
   }, [provider])
+
+  useEffect(() => {
+    // Only try to fetch if the read contract is set and we’re recognized as a voter
+    if (votingContractRead && isVoter) {
+      handleViewElections()
+    }
+  }, [votingContractRead, isVoter])
 
   // ----------------- Elections List Functions -----------------
   const handleViewElections = async () => {
@@ -112,14 +119,25 @@ function VoterDashboard() {
     // Load offices for this election
     try {
       setLoading(true)
-      const offices = []
-      for (let i = 0; i < election.officeCount; i++) {
-        offices.push({
-          index: i,
-          name: `Office ${i + 1}`, // Using index+1 as name since contract doesn't store office names
-        })
-      }
+      // Create a filter for the OfficeAdded event for this election
+      const filter = votingContractRead.filters.OfficeAdded(election.id)
+      // Query past events (you can also set fromBlock if needed)
+      const events = await votingContractRead.queryFilter(filter)
+      const offices = events
+      .map((event) => ({
+        index: Number(event.args.officeIndex),
+        name: event.args.officeName,
+      }))
+      .sort((a, b) => a.index - b.index)
       setOfficesList(offices)
+      
+      // Map events to get office objects (ensure sorting by officeIndex)
+      // for (let i = 0; i < election.officeCount; i++) {
+      //   offices.push({
+      //     index: i,
+      //     name: `Office ${i + 1}`, // Using index+1 as name since contract doesn't store office names
+      //   })
+      // }
     } catch (error) {
       console.error(error)
       setStatusMessage("Error loading offices")
@@ -223,11 +241,13 @@ function VoterDashboard() {
             </div>
           ))}
         </div>
-      ) : (
+      )
+       : (
         <div className="card">
           <p>No elections found.</p>
         </div>
-      )}
+      )
+      }
     </div>
   )
 

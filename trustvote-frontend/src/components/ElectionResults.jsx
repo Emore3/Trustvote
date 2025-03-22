@@ -32,8 +32,8 @@ function ElectionResults() {
             const contractRead = new ethers.Contract(contractAddress, contractABI.abi, ethersProvider)
             setVotingContractRead(contractRead)
 
-            // Load initial data
-            handleViewElections()
+            // // Load initial data
+            // handleViewElections()
           }
         } catch (error) {
           console.error("Error initializing election results page:", error)
@@ -45,6 +45,12 @@ function ElectionResults() {
     }
     init()
   }, [provider])
+
+  useEffect(() => {
+    if (votingContractRead) {
+      handleViewElections();
+    }
+  }, [votingContractRead]);
 
   // ----------------- Elections List Functions -----------------
   const handleViewElections = async () => {
@@ -76,37 +82,49 @@ function ElectionResults() {
     }
   }
 
-  // ----------------- Election Selection and Results -----------------
   const handleSelectElection = async (election) => {
     try {
       setLoading(true)
       setSelectedElectionId(election.id)
       setSelectedElectionDetails(election)
+  
+      // Query the OfficeAdded events for the selected election.
+      const officeAddedFilter = votingContractRead.filters.OfficeAdded(election.id)
+      const officeAddedEvents = await votingContractRead.queryFilter(officeAddedFilter)
+      
+      // Build a mapping from office index to office name.
+      const officeNameMap = {}
+      officeAddedEvents.forEach((event) => {
+        const index = Number(event.args.officeIndex)
+        officeNameMap[index] = event.args.officeName
+      })
+  
       const offices = []
       // Loop through each office for the election (from 0 to officeCount-1)
       for (let i = 0; i < election.officeCount; i++) {
         const candidates = await votingContractRead.getCandidates(election.id, i)
-        // Convert returned candidate objects to plain JS objects
+        // Convert returned candidate objects to plain JS objects.
         const candidateResults = candidates.map((c) => ({
           name: c.name,
           voteCount: Number(c.voteCount),
         }))
-
-        // Calculate total votes for this office
+  
+        // Calculate total votes for this office.
         const totalVotes = candidateResults.reduce((sum, c) => sum + c.voteCount, 0)
-
-        // Add percentage to each candidate
+  
+        // Add percentage to each candidate.
         const candidatesWithPercentage = candidateResults.map((c) => ({
           ...c,
           percentage: totalVotes > 0 ? Math.round((c.voteCount / totalVotes) * 100) : 0,
         }))
-
-        // Sort candidates by vote count (descending)
+  
+        // Sort candidates by vote count (descending).
         candidatesWithPercentage.sort((a, b) => b.voteCount - a.voteCount)
-
+  
         offices.push({
           officeIndex: i,
-          officeName: `Office ${i + 1}`, // Replace with actual office name if available
+          // Use the queried office name or fallback to a placeholder.
+          officeName: officeNameMap[i] || `Office ${i + 1}`,
           candidates: candidatesWithPercentage,
           totalVotes,
         })
@@ -120,6 +138,7 @@ function ElectionResults() {
       setLoading(false)
     }
   }
+  
 
   return (
     <div className="container">
