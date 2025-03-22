@@ -117,10 +117,12 @@ function AdminDashboard() {
       setLoading(true);
       const countBN = await votingContractRead.electionCount();
       const electionCount = Number(countBN.toString());
+      console.log(electionCount)
       const list = [];
       for (let i = 1; i <= electionCount; i++) {
         const details = await votingContractRead.getElectionDetails(i);
         // details: [name, active, startTime, endTime, officeCount]
+        console.log(i)
         list.push({
           id: i,
           name: details[0],
@@ -274,23 +276,23 @@ function AdminDashboard() {
     }
   };
 
-  const handleDeleteElection = async () => {
-    if (!votingContract || !selectedElectionId) return;
-    try {
-      setLoading(true);
-      const tx = await votingContract.deleteElection(selectedElectionId);
-      await tx.wait();
-      setStatusMessage("Election deleted successfully");
-      setSelectedElectionId(null);
-      setSelectedElectionDetails(null);
-      handleViewElections();
-    } catch (error) {
-      console.error(error);
-      setStatusMessage("Error deleting election");
-    } finally {
-      setLoading(false);
-    }
-  };
+  // const handleDeleteElection = async () => {
+  //   if (!votingContract || !selectedElectionId) return;
+  //   try {
+  //     setLoading(true);
+  //     const tx = await votingContract.deleteElection(selectedElectionId);
+  //     await tx.wait();
+  //     setStatusMessage("Election deleted successfully");
+  //     setSelectedElectionId(null);
+  //     setSelectedElectionDetails(null);
+  //     handleViewElections();
+  //   } catch (error) {
+  //     console.error(error);
+  //     setStatusMessage("Error deleting election");
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
 
   const handleEndElection = async () => {
     if (!votingContract || !selectedElectionId) return;
@@ -631,12 +633,12 @@ function AdminDashboard() {
             <button onClick={handleEndElection} className="btn-secondary">
               End Election
             </button>
-            <button
+            {/* <button
               onClick={handleDeleteElection}
               style={{ backgroundColor: "var(--danger)" }}
             >
               Delete Election
-            </button>
+            </button> */}
           </div>
         </div>
       ) : (

@@ -8,7 +8,7 @@ function Home() {
   return (
     <div className="container">
       <section className="hero">
-        <h1>Secure Blockchain Voting System</h1>
+        <h1>Welcome to Trustvote</h1>
         <p>
           TrustVote leverages blockchain technology to provide a transparent, secure, and tamper-proof voting
           experience. Cast your vote with confidence knowing that your voice matters and is protected.
@@ -26,11 +26,8 @@ function Home() {
         ) : (
           <div className="hero-buttons">
             <button onClick={login} className="btn-primary">
-              Connect Wallet
+              Get Started
             </button>
-            <Link to="/results" className="btn-secondary">
-              View Results
-            </Link>
           </div>
         )}
       </section>

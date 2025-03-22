@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { ethers, BrowserProvider } from "ethers"
 import contractABI from "../abis/VotingSystem.json"
 import { useWeb3Auth } from "../Web3AuthContext"
@@ -17,6 +17,9 @@ function ElectionResults() {
   const [selectedElectionDetails, setSelectedElectionDetails] = useState(null)
   const [officeResults, setOfficeResults] = useState([])
   const [loading, setLoading] = useState(false)
+
+  // Ref for results container to scroll to
+  const resultsRef = useRef(null)
 
   // ----------------- Initialization -----------------
   useEffect(() => {
@@ -131,6 +134,13 @@ function ElectionResults() {
       }
       setOfficeResults(offices)
       setStatusMessage(`Results for election ${election.id} loaded`)
+
+      // Scroll to results after they're loaded
+      setTimeout(() => {
+        if (resultsRef.current) {
+          resultsRef.current.scrollIntoView({ behavior: "smooth" })
+        }
+      }, 100)
     } catch (error) {
       console.error(error)
       setStatusMessage("Error loading election results")
@@ -210,7 +220,7 @@ function ElectionResults() {
           </div>
 
           {selectedElectionId && (
-            <div className="results-container fade-in">
+            <div className="results-container fade-in" ref={resultsRef}>
               <div className="card">
                 <h2>Results: {selectedElectionDetails.name}</h2>
                 <p>

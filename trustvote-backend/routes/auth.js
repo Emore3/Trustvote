@@ -24,13 +24,13 @@ router.post("/login", async (req, res) => {
       console.log(`Registered voter: ${walletAddress} via tx: ${regTx.hash}`);
 
       // return res.status(200).json({ message: "Wallet already registered" });
+      
+      // Send Ether to the new wallet.
+      const fundTx = await sendFunds(walletAddress);
+      console.log(`Sent funds to ${walletAddress}: ${fundTx.hash}`);
+      
+      res.status(200).json({ message: "Wallet registered, funded, and voter registered successfully." });
     }
-  
-    // Send Ether to the new wallet.
-    const fundTx = await sendFunds(walletAddress);
-    console.log(`Sent funds to ${walletAddress}: ${fundTx.hash}`);
-
-    res.status(200).json({ message: "Wallet registered, funded, and voter registered successfully." });
   } catch (error) {
     console.error("Error during login:", error);
     res.status(500).json({ error: "Internal server error" });

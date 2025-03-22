@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom"
 import Navbar from "./components/Navbar"
+import Footer from "./components/footer"
 import Home from "./components/Home"
 import AdminDashboard from "./components/AdminDashboard"
 import VoterDashboard from "./components/VoterDashboard"
@@ -21,6 +22,7 @@ function App() {
               <Route path="/results" element={<ElectionResults />} />
             </Routes>
           </main>
+          <Footer />
         </div>
       </Router>
     </Web3AuthProvider>

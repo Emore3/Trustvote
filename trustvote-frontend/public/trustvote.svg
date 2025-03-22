@@ -1,0 +1,78 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="48"
+  height="48"
+  viewBox="0 0 24 24"
+>
+  <defs>
+    <!-- 1) Define a linear gradient using two brand colors -->
+    <linearGradient id="brandGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <!-- Replace these stops with your own brand colors -->
+      <stop offset="0%" stop-color="#00c6ff" />
+      <stop offset="100%" stop-color="#0072ff" />
+    </linearGradient>
+
+    <!-- 2) Define a filter for a subtle glow (drop shadow) -->
+    <filter id="glowFilter" x="-50%" y="-50%" width="200%" height="200%">
+      <!-- Slightly blur the graphic to create a glow -->
+      <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blurOut" />
+      <!-- Merge the original shape with the blur to create a glow effect -->
+      <feMerge>
+        <feMergeNode in="blurOut" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- 3) Apply the gradient as the stroke and the glow filter to the group -->
+  <g filter="url(#glowFilter)">
+    <path
+      d="M20 11.08V8l-6-6H6a2 2 0 0 0-2 2v16c0 1.1.9 2 2 2h12a2 2 0 0 0 2-2v-3.08"
+      fill="none"
+      stroke="url(#brandGradient)"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <path
+      d="M18 14v4h4"
+      fill="none"
+      stroke="url(#brandGradient)"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <path
+      d="M18 22l-3-3 3-3"
+      fill="none"
+      stroke="url(#brandGradient)"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <path
+      d="M9 9h1"
+      fill="none"
+      stroke="url(#brandGradient)"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <path
+      d="M9 13h1"
+      fill="none"
+      stroke="url(#brandGradient)"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <path
+      d="M9 17h1"
+      fill="none"
+      stroke="url(#brandGradient)"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  </g>
+</svg>

@@ -28,6 +28,11 @@ function VoterDashboard() {
   const [candidatesList, setCandidatesList] = useState([])
   const [selectedCandidate, setSelectedCandidate] = useState(null)
 
+  // New state for step-by-step voting
+  const [currentOfficeIndex, setCurrentOfficeIndex] = useState(0)
+  const [votedOffices, setVotedOffices] = useState({})
+  const [votingComplete, setVotingComplete] = useState(false)
+
   // ----------------- Initialization -----------------
   useEffect(() => {
     const init = async () => {
@@ -56,7 +61,7 @@ function VoterDashboard() {
             setVotingContract(contractWithSigner)
             setVotingContractRead(contractRead)
 
-            // Load initial data
+            // Load initial data automatically
             // await handleViewElections()
           }
         } catch (error) {
@@ -112,7 +117,10 @@ function VoterDashboard() {
     setSelectedElectionDetails(election)
     setStatusMessage(`Election ${election.id} selected`)
 
-    // Reset office and candidate selections
+    // Reset voting state
+    setCurrentOfficeIndex(0)
+    setVotedOffices({})
+    setVotingComplete(false)
     setSelectedOffice(null)
     setSelectedCandidate(null)
 
@@ -124,20 +132,20 @@ function VoterDashboard() {
       // Query past events (you can also set fromBlock if needed)
       const events = await votingContractRead.queryFilter(filter)
       const offices = events
-      .map((event) => ({
-        index: Number(event.args.officeIndex),
-        name: event.args.officeName,
-      }))
-      .sort((a, b) => a.index - b.index)
+        .map((event) => ({
+          index: Number(event.args.officeIndex),
+          name: event.args.officeName,
+        }))
+        .sort((a, b) => a.index - b.index)
       setOfficesList(offices)
-      
-      // Map events to get office objects (ensure sorting by officeIndex)
-      // for (let i = 0; i < election.officeCount; i++) {
-      //   offices.push({
-      //     index: i,
-      //     name: `Office ${i + 1}`, // Using index+1 as name since contract doesn't store office names
-      //   })
-      // }
+
+      // Automatically switch to vote section
+      setCurrentSection("vote")
+
+      // If there are offices, select the first one
+      if (offices.length > 0) {
+        await loadCandidatesForOffice(offices[0])
+      }
     } catch (error) {
       console.error(error)
       setStatusMessage("Error loading offices")
@@ -146,7 +154,7 @@ function VoterDashboard() {
     }
   }
 
-  const handleSelectOffice = async (office) => {
+  const loadCandidatesForOffice = async (office) => {
     setSelectedOffice(office)
 
     // Load candidates for this office
@@ -159,6 +167,13 @@ function VoterDashboard() {
         voteCount: Number(candidate.voteCount),
       }))
       setCandidatesList(candidatesList)
+
+      // If this office has been voted for, pre-select the candidate
+      if (votedOffices[office.index] !== undefined) {
+        setSelectedCandidate(votedOffices[office.index])
+      } else {
+        setSelectedCandidate(null)
+      }
     } catch (error) {
       console.error(error)
       setStatusMessage("Error loading candidates")
@@ -174,15 +189,54 @@ function VoterDashboard() {
       setLoading(true)
       const tx = await votingContract.vote(selectedElectionId, selectedOffice.index, selectedCandidate)
       await tx.wait()
-      setStatusMessage("Vote cast successfully!")
 
-      // Reset selections after voting
-      setSelectedCandidate(null)
+      // Update voted offices
+      setVotedOffices((prev) => ({
+        ...prev,
+        [selectedOffice.index]: selectedCandidate,
+      }))
+
+      setStatusMessage(`Vote cast successfully for ${selectedOffice.name}!`)
+
+      // Move to next office if available
+      if (currentOfficeIndex < officesList.length - 1) {
+        const nextIndex = currentOfficeIndex + 1
+        setCurrentOfficeIndex(nextIndex)
+        await loadCandidatesForOffice(officesList[nextIndex])
+      } else {
+        setVotingComplete(true)
+      }
     } catch (error) {
       console.error(error)
-      setStatusMessage('Error casting vote: ' + error.message.split(" (")[0])
+      setStatusMessage("Error casting vote: " + error.message.split(" (")[0])
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Navigation functions for step-by-step voting
+  const goToNextOffice = async () => {
+    if (currentOfficeIndex < officesList.length - 1) {
+      const nextIndex = currentOfficeIndex + 1
+      setCurrentOfficeIndex(nextIndex)
+      await loadCandidatesForOffice(officesList[nextIndex])
+    } else {
+      setVotingComplete(true)
+    }
+  }
+
+  const goToPreviousOffice = async () => {
+    if (currentOfficeIndex > 0) {
+      const prevIndex = currentOfficeIndex - 1
+      setCurrentOfficeIndex(prevIndex)
+      await loadCandidatesForOffice(officesList[prevIndex])
+    }
+  }
+
+  const goToOffice = async (index) => {
+    if (index >= 0 && index < officesList.length) {
+      setCurrentOfficeIndex(index)
+      await loadCandidatesForOffice(officesList[index])
     }
   }
 
@@ -241,13 +295,11 @@ function VoterDashboard() {
             </div>
           ))}
         </div>
-      )
-       : (
+      ) : (
         <div className="card">
           <p>No elections found.</p>
         </div>
-      )
-      }
+      )}
     </div>
   )
 
@@ -261,67 +313,116 @@ function VoterDashboard() {
           <p>Election ends: {new Date(selectedElectionDetails?.endTime * 1000).toLocaleString()}</p>
 
           {officesList.length > 0 ? (
-            <div className="mt-4">
-              <h4>Select an Office</h4>
-              <div className="form-group">
-                <select
-                  value={selectedOffice ? selectedOffice.index : ""}
-                  onChange={(e) => {
-                    const officeIndex = Number.parseInt(e.target.value)
-                    const office = officesList.find((o) => o.index === officeIndex)
-                    if (office) handleSelectOffice(office)
-                  }}
-                >
-                  <option value="">-- Select Office --</option>
-                  {officesList.map((office) => (
-                    <option key={office.index} value={office.index}>
-                      {office.name}
-                    </option>
-                  ))}
-                </select>
+            <div className="voting-interface">
+              {/* Progress indicator */}
+              <div className="voting-progress">
+                {officesList.map((office, index) => (
+                  <button
+                    key={office.index}
+                    className={`progress-step ${index === currentOfficeIndex ? "active" : ""} ${votedOffices[office.index] !== undefined ? "voted" : ""}`}
+                    onClick={() => goToOffice(index)}
+                  >
+                    {index + 1}
+                  </button>
+                ))}
               </div>
 
-              {selectedOffice && (
-                <div className="mt-4">
-                  <h4>Select a Candidate</h4>
-                  {candidatesList.length > 0 ? (
-                    <div>
-                      {candidatesList.map((candidate, idx) => (
-                        <div
-                          key={idx}
-                          className={`candidate-option ${selectedCandidate === candidate.index ? "selected" : ""}`}
-                          onClick={() => setSelectedCandidate(candidate.index)}
-                        >
-                          <div className="candidate-option-header">
-                            <span className="candidate-option-name">{candidate.name}</span>
-                            {selectedCandidate === candidate.index && (
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                width="24"
-                                height="24"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              >
-                                <polyline points="20 6 9 17 4 12"></polyline>
-                              </svg>
-                            )}
-                          </div>
-                        </div>
-                      ))}
+              {/* Current office voting */}
+              <div className="voting-step">
+                <h4 className="office-title">
+                  {officesList[currentOfficeIndex]?.name}
+                  <span className="office-counter">
+                    ({currentOfficeIndex + 1}/{officesList.length})
+                  </span>
+                </h4>
 
-                      <button onClick={handleCastVote} disabled={selectedCandidate === null} className="mt-4">
-                        Cast Vote
-                      </button>
+                {votingComplete ? (
+                  <div className="voting-complete">
+                    <div className="voting-complete-icon">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="48"
+                        height="48"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                      </svg>
                     </div>
-                  ) : (
-                    <p>No candidates found for this office.</p>
-                  )}
-                </div>
-              )}
+                    <h3>Voting Complete!</h3>
+                    <p>Thank you for casting your votes in this election.</p>
+                    <button className="btn-primary" onClick={() => setCurrentSection("elections")}>
+                      Return to Elections
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="candidates-list">
+                      {candidatesList.length > 0 ? (
+                        candidatesList.map((candidate) => (
+                          <div
+                            key={candidate.index}
+                            className={`candidate-option ${selectedCandidate === candidate.index ? "selected" : ""}`}
+                            onClick={() => setSelectedCandidate(candidate.index)}
+                          >
+                            <div className="candidate-option-header">
+                              <span className="candidate-option-name">{candidate.name}</span>
+                              {selectedCandidate === candidate.index && (
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="24"
+                                  height="24"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                >
+                                  <polyline points="20 6 9 17 4 12"></polyline>
+                                </svg>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <p>No candidates found for this office.</p>
+                      )}
+                    </div>
+
+                    <div className="voting-navigation">
+                      <button
+                        onClick={goToPreviousOffice}
+                        disabled={currentOfficeIndex === 0}
+                        className="btn-secondary"
+                      >
+                        Previous
+                      </button>
+
+                      <div className="voting-actions">
+                        {votedOffices[officesList[currentOfficeIndex]?.index] !== undefined ? (
+                          <button onClick={goToNextOffice} className="btn-primary">
+                            {currentOfficeIndex === officesList.length - 1 ? "Finish" : "Next"}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={handleCastVote}
+                            disabled={selectedCandidate === null}
+                            className="btn-primary"
+                          >
+                            Cast Vote
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           ) : (
             <p>No offices available for this election.</p>
