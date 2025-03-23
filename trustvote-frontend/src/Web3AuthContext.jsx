@@ -73,16 +73,10 @@ export const Web3AuthProvider = ({ children }) => {
           const response = await axios.post('https://trustvote-backend.onrender.com/api/login', { walletAddress })
           if (response){ 
             console.log(response)
+          setLoggedIn(true);
           }
         } catch (error){
           console.log("Pellumi Error: ", error)
-        }
-  
-        if (response) {
-          console.log(response)
-          // setLoggedIn(true);
-        } else {
-          console.error('Login Failed:', data);
         }
       }
     } catch (error) {

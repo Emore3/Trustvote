@@ -4,35 +4,6 @@ function Footer() {
     return (
       <footer className="footer">
         <div className="container">
-          <div className="footer-content">
-            <div className="footer-section">
-              <h3 className="footer-title">TrustVote</h3>
-              <p className="footer-description">Secure, transparent, and tamper-proof blockchain voting system.</p>
-            </div>
-  
-            <div className="footer-section">
-              <h3 className="footer-title">Links</h3>
-              <ul className="footer-links">
-                <li>
-                  <a href="/">Home</a>
-                </li>
-                <li>
-                  <a href="/voter">Vote</a>
-                </li>
-                <li>
-                  <a href="/results">Results</a>
-                </li>
-              </ul>
-            </div>
-  
-            {/* <div className="footer-section">
-              <h3 className="footer-title">Contact</h3>
-              <p>
-                <a href="mailto:info@trustvote.com">BasseyIm</a>
-              </p>
-            </div> */}
-          </div>
-  
           <div className="footer-bottom">
             <p>&copy; {currentYear} TrustVote. All rights reserved.</p>
             <div className="footer-social">
