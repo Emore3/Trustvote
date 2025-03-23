@@ -3,6 +3,7 @@ import { CHAIN_NAMESPACES, WEB3AUTH_NETWORK } from "@web3auth/base";
 import { EthereumPrivateKeyProvider } from "@web3auth/ethereum-provider";
 import { Web3Auth } from "@web3auth/modal";
 import axios from 'axios';
+import "./App.css"
 
 const clientId = import.meta.env.VITE_WEB3AUTH_CLIENT_ID;
 
@@ -30,6 +31,8 @@ const Web3AuthContext = createContext();
 export const Web3AuthProvider = ({ children }) => {
   const [provider, setProvider] = useState(null);
   const [loggedIn, setLoggedIn] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
 
   useEffect(() => {
     const init = async () => {
@@ -52,6 +55,7 @@ export const Web3AuthProvider = ({ children }) => {
       setProvider(web3authProvider);
   
       if (web3auth.connected) {
+        setIsLoading(true);
         // Get wallet address
         const accounts = await web3authProvider.request({ method: 'eth_accounts' });
         const walletAddress = accounts[0];
@@ -72,8 +76,8 @@ export const Web3AuthProvider = ({ children }) => {
         try{
           const response = await axios.post('https://trustvote-backend.onrender.com/api/login', { walletAddress })
           if (response){ 
-            console.log(response)
-          setLoggedIn(true);
+            console.log(response);
+            setLoggedIn(true);
           }
         } catch (error){
           console.log("Pellumi Error: ", error)
@@ -82,6 +86,8 @@ export const Web3AuthProvider = ({ children }) => {
     } catch (error) {
       console.error('Error during login:', error);
       logout()
+    } finally{
+      setIsLoading(false)
     }
   };
   
@@ -93,8 +99,17 @@ export const Web3AuthProvider = ({ children }) => {
   };
 
   return (
-    <Web3AuthContext.Provider value={{ provider, loggedIn, login, logout, web3auth }}>
-      {children}
+    <Web3AuthContext.Provider value={{ provider, loggedIn, login, logout, web3auth, isLoading }}>
+      {isLoading ? (
+        // <div className="loading-screen">
+        //   <p>Loading...</p>
+        // </div>
+        <div className="loading-screen">
+          <div className="loading-spinner"></div>
+        </div>
+      ) : (
+        children
+      )}
     </Web3AuthContext.Provider>
   );
 };
