@@ -6,10 +6,12 @@ const cors = require('cors');
 // Import routes
 const authRoutes = require("./routes/auth");
 
-app.use(cors());
 
 const app = express();
+
+
 app.use(express.json());
+app.use(cors());
 
 // Connect to MongoDB
 mongoose
