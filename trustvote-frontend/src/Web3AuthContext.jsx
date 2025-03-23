@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { CHAIN_NAMESPACES, WEB3AUTH_NETWORK } from "@web3auth/base";
 import { EthereumPrivateKeyProvider } from "@web3auth/ethereum-provider";
 import { Web3Auth } from "@web3auth/modal";
+import axios from 'axios';
 
 const clientId = import.meta.env.VITE_WEB3AUTH_CLIENT_ID;
 
@@ -54,27 +55,39 @@ export const Web3AuthProvider = ({ children }) => {
         // Get wallet address
         const accounts = await web3authProvider.request({ method: 'eth_accounts' });
         const walletAddress = accounts[0];
-  
+
+        console.log(walletAddress)
+
+        // const im = JSON.stringify({ "walletAddress" : walletAddress })
+        // console.log(im)
         // Send wallet address to backend
-        const response = await fetch('https://trustvote-backend.onrender.com/api/login', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ walletAddress: walletAddress }), // Sending wallet address
-        });
+        // const response = await axios.post('https://trustvote-backend.onrender.com/api/login', { walletAddress })
+        // .then(response => {
+        //   console.log('Login Response:', response);
+        // })
+        // .catch(error => {
+        //   console.error('Login Error:', error);
+        // });
+
+        try{
+          const response = await axios.post('https://trustvote-backend.onrender.com/api/login', { walletAddress })
+          if (response){ 
+            console.log(response)
+          }
+        } catch (error){
+          console.log("Pellumi Error: ", error)
+        }
   
-        const data = await response.json();
-        console.log('Login Response:', data);
-  
-        if (response.ok) {
-          setLoggedIn(true);
+        if (response) {
+          console.log(response)
+          // setLoggedIn(true);
         } else {
           console.error('Login Failed:', data);
         }
       }
     } catch (error) {
       console.error('Error during login:', error);
+      logout()
     }
   };
   
