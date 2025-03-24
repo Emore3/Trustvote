@@ -48,6 +48,13 @@ function AdminDashboard() {
   const [candidateName, setCandidateName] = useState("");
   const [officeIndex, setOfficeIndex] = useState(""); // if needed for candidate operations
 
+  // New states
+  const [officesList, setOfficesList] = useState([]);
+  const [selectedOfficeIndex, setSelectedOfficeIndex] = useState("");
+  const [officeCandidates, setOfficeCandidates] = useState([]);
+
+  const deploymentBlock = 7959527;
+
   // ----------------- Initialization -----------------
   useEffect(() => {
     const init = async () => {
@@ -86,7 +93,6 @@ function AdminDashboard() {
             );
             setVotingContract(contractWithSigner);
             setVotingContractRead(contractRead);
-
           }
         } catch (error) {
           console.error("Error initializing admin dashboard:", error);
@@ -109,39 +115,169 @@ function AdminDashboard() {
     }
   }, [votingContractRead, isAdmin]);
 
+  // Add an effect to load candidates when the selected office changes
+  useEffect(() => {
+    if (selectedOfficeIndex !== "") {
+      loadCandidatesForOffice(selectedOfficeIndex);
+    }
+  }, [selectedOfficeIndex]);
+
   // ----------------- Elections List Functions -----------------
   const handleViewElections = async () => {
-    console.log("i ran 3")
     if (!votingContractRead) return;
     try {
       setLoading(true);
-      const countBN = await votingContractRead.electionCount();
-      const electionCount = Number(countBN.toString());
-      console.log(electionCount)
+      // Query for all ElectionCreated events from the contract
+      const electionEvents = await votingContractRead.queryFilter(
+        "ElectionCreated",
+        deploymentBlock,
+        "latest"
+      );
+      console.log("Fetched election events:", electionEvents);
+
+      // Build a list of elections by processing each ElectionCreated event
       const list = [];
-      for (let i = 1; i <= electionCount; i++) {
-        const details = await votingContractRead.getElectionDetails(i);
-        // details: [name, active, startTime, endTime, officeCount]
-        console.log(i)
+      for (const event of electionEvents) {
+        const { electionId, name, startTime, endTime } = event.args;
+        const id = Number(electionId);
+
+        // Query for OfficeAdded events specific to this election
+        const officeAddedFilter = votingContractRead.filters.OfficeAdded(id);
+        const officeEvents = await votingContractRead.queryFilter(
+          officeAddedFilter,
+          deploymentBlock,
+          "latest"
+        );
+
+        // Derive the office count from the number of OfficeAdded events
+        const officeCount = officeEvents.length;
+
+        // Optionally, build an array of office details (e.g., officeIndex and officeName)
+        const offices = officeEvents.map((ev) => ({
+          officeIndex: Number(ev.args.officeIndex),
+          officeName: ev.args.officeName,
+        }));
+
         list.push({
-          id: i,
-          name: details[0],
-          active: details[1],
-          startTime: Number(details[2]),
-          endTime: Number(details[3]),
-          officeCount: Number(details[4]),
+          id,
+          name,
+          active: true, // Assuming elections are active when created
+          startTime: Number(startTime),
+          endTime: Number(endTime),
+          officeCount,
+          offices, // You can use this array to display office details in your UI
         });
       }
+
+      // Update state with the list of elections (including office information)
       setElectionsList(list);
-      setStatusMessage("Elections fetched successfully");
+      setStatusMessage("Elections fetched successfully via events");
     } catch (error) {
-      console.error(error);
+      console.error("Error fetching elections from events:", error);
       setStatusMessage("Error fetching elections");
     } finally {
       setLoading(false);
     }
   };
 
+  const loadOfficesForElection = async (electionId) => {
+    if (!votingContractRead || !electionId) return;
+    try {
+      setLoading(true);
+      // Create a filter for the OfficeAdded event for this election
+      const filter = votingContractRead.filters.OfficeAdded(electionId);
+      // Query past events
+      const events = await votingContractRead.queryFilter(
+        filter,
+        deploymentBlock,
+        "latest"
+      );
+      const offices = events
+        .map((event) => ({
+          index: Number(event.args.officeIndex),
+          name: event.args.officeName,
+        }))
+        .sort((a, b) => a.index - b.index);
+      setOfficesList(offices);
+
+      // Reset selected office and candidates
+      setSelectedOfficeIndex("");
+      setOfficeCandidates([]);
+    } catch (error) {
+      console.error("Error loading offices:", error);
+      setStatusMessage("Error loading offices");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadCandidatesForOffice = async (officeIndex) => {
+    if (!votingContractRead || !selectedElectionId || officeIndex === "")
+      return;
+    try {
+      setLoading(true);
+
+      // --- 1. Query CandidateAdded events for the selected election ---
+      const candidateAddedFilter =
+        votingContractRead.filters.CandidateAdded(selectedElectionId);
+      const candidateAddedEvents = await votingContractRead.queryFilter(
+        candidateAddedFilter,
+        deploymentBlock,
+        "latest"
+      );
+
+      // Manually filter the events to get candidates for the selected office
+      const candidateEventsForOffice = candidateAddedEvents.filter(
+        (event) => Number(event.args.officeIndex) === Number(officeIndex)
+      );
+
+      // Build a list of candidates using the CandidateAdded events.
+      // Initialize voteCount to 0; will update based on VoteCast events.
+      let candidatesList = candidateEventsForOffice.map((event) => ({
+        candidateIndex: Number(event.args.candidateIndex),
+        name: event.args.candidateName,
+        voteCount: 0,
+      }));
+
+      // --- 2. Query VoteCast events for the selected election ---
+      const voteCastFilter =
+        votingContractRead.filters.VoteCast(selectedElectionId);
+      const voteCastEvents = await votingContractRead.queryFilter(
+        voteCastFilter,
+        deploymentBlock,
+        "latest"
+      );
+
+      // Filter vote events for the selected office
+      const voteEventsForOffice = voteCastEvents.filter(
+        (event) => Number(event.args.officeIndex) === Number(officeIndex)
+      );
+
+      // --- 3. Tally votes for each candidate ---
+      voteEventsForOffice.forEach((event) => {
+        const candidateIndex = Number(event.args.candidateIndex);
+        const candidate = candidatesList.find(
+          (c) => c.candidateIndex === candidateIndex
+        );
+        if (candidate) {
+          candidate.voteCount += 1;
+        }
+      });
+
+      // Optionally, sort the candidates (e.g., descending by voteCount)
+      candidatesList.sort((a, b) => b.voteCount - a.voteCount);
+
+      // Update your state with the reconstructed candidate list
+      setOfficeCandidates(candidatesList);
+    } catch (error) {
+      console.error("Error loading candidates from events:", error);
+      setStatusMessage("Error loading candidates");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Modify the handleSelectElection function to also load offices
   const handleSelectElection = async (election) => {
     setSelectedElectionId(election.id);
     setSelectedElectionDetails(election);
@@ -155,6 +291,9 @@ function AdminDashboard() {
     setUpdateElectionName(election.name);
     setUpdateElectionStartTime(startDate);
     setUpdateElectionEndTime(endDate);
+
+    // Load offices for this election
+    await loadOfficesForElection(election.id);
   };
 
   // ----------------- Admin CRUD Functions -----------------
@@ -317,338 +456,51 @@ function AdminDashboard() {
       setLoading(true);
       const tx = await votingContract.addOffice(selectedElectionId, officeName);
       await tx.wait();
-      setStatusMessage("Office added successfully");
+      setStatusMessage(`Office "${officeName}" added successfully`);
       setOfficeName("");
-      // Refresh selected election details
-      handleViewElections();
+      // Refresh the offices list
+      await loadOfficesForElection(selectedElectionId);
     } catch (error) {
       console.error(error);
-      setStatusMessage("Error adding office");
+      setStatusMessage("Error adding office: " + error.message.split(" (")[0]);
     } finally {
       setLoading(false);
     }
   };
 
   const handleAddCandidate = async () => {
-    if (!votingContract || !selectedElectionId) return;
+    if (
+      !votingContract ||
+      !selectedElectionId ||
+      selectedOfficeIndex === "" ||
+      !candidateName
+    )
+      return;
     try {
       setLoading(true);
-      const officeIdx = Number(officeIndex);
       const tx = await votingContract.addCandidate(
         selectedElectionId,
-        officeIdx,
+        selectedOfficeIndex,
         candidateName
       );
       await tx.wait();
-      setStatusMessage("Candidate added successfully");
+      setStatusMessage(
+        `Candidate "${candidateName}" added successfully to office index ${selectedOfficeIndex}`
+      );
       setCandidateName("");
+      // Refresh the candidates list
+      loadCandidatesForOffice(selectedOfficeIndex);
     } catch (error) {
       console.error(error);
-      setStatusMessage("Error adding candidate");
+      setStatusMessage(
+        "Error adding candidate: " + error.message.split(" (")[0]
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  // ----------------- Render Sections -----------------
-  const renderDashboard = () => (
-    <div className="fade-in">
-      <h2>Admin Dashboard</h2>
-      <p className="mb-4">
-        Welcome,{" "}
-        {account &&
-          `${account.substring(0, 6)}...${account.substring(
-            account.length - 4
-          )}`}
-        . You are {isAdmin ? "an admin" : "not an admin"}.
-      </p>
-
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-value">{electionsList.length}</div>
-          <div className="stat-label">Total Elections</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value">
-            {
-              electionsList.filter(
-                (e) => e.active && Date.now() / 1000 <= e.endTime
-              ).length
-            }
-          </div>
-          <div className="stat-label">Active Elections</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value">{adminsList.length}</div>
-          <div className="stat-label">Admins</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value">{votersList.length}</div>
-          <div className="stat-label">Registered Voters</div>
-        </div>
-      </div>
-
-      <div className="card">
-        <h3>Elections</h3>
-        <button onClick={handleViewElections} className="mb-4">
-          Refresh Elections
-        </button>
-
-        {electionsList.length > 0 ? (
-          <div className="election-grid">
-            {electionsList.map((election) => (
-              <div key={election.id} className="election-card">
-                <div className="election-card-header">
-                  <div className="election-card-title">{election.name}</div>
-                  <span
-                    className={`election-card-status ${
-                      election.active && Date.now() / 1000 <= election.endTime
-                        ? "active"
-                        : "inactive"
-                    }`}
-                  >
-                    {election.active && Date.now() / 1000 <= election.endTime
-                      ? "Active"
-                      : "Inactive"}
-                  </span>
-                </div>
-                <div className="election-card-body">
-                  <div className="election-card-info">
-                    <div className="election-card-info-item">
-                      <span className="election-card-info-label">ID:</span>
-                      <span className="election-card-info-value">
-                        {election.id}
-                      </span>
-                    </div>
-                    <div className="election-card-info-item">
-                      <span className="election-card-info-label">Start:</span>
-                      <span className="election-card-info-value">
-                        {new Date(election.startTime * 1000).toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="election-card-info-item">
-                      <span className="election-card-info-label">End:</span>
-                      <span className="election-card-info-value">
-                        {new Date(election.endTime * 1000).toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="election-card-info-item">
-                      <span className="election-card-info-label">Offices:</span>
-                      <span className="election-card-info-value">
-                        {election.officeCount}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <div className="election-card-footer">
-                  <button onClick={() => handleSelectElection(election)}>
-                    Manage
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p>No elections found.</p>
-        )}
-      </div>
-    </div>
-  );
-
-  const renderAdminManagement = () => (
-    <div className="fade-in">
-      <h2>Admin Management</h2>
-
-      <div className="card mb-4">
-        <h3>Current Admins</h3>
-        <button onClick={handleViewAdmins} className="mb-4">
-          Refresh Admin List
-        </button>
-
-        {adminsList && adminsList.length > 0 ? (
-          <table>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Admin Address</th>
-              </tr>
-            </thead>
-            <tbody>
-              {adminsList.map((admin, idx) => (
-                <tr key={idx}>
-                  <td>{idx + 1}</td>
-                  <td>{admin}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p>No admins found.</p>
-        )}
-      </div>
-
-      <div className="card">
-        <h3>Add New Admin</h3>
-        <div className="form-group">
-          <label className="form-label">Admin Address</label>
-          <input
-            type="text"
-            placeholder="0x..."
-            value={newAdmin}
-            onChange={(e) => setNewAdmin(e.target.value)}
-          />
-        </div>
-        <button onClick={handleAddAdmin} disabled={!newAdmin}>
-          Add Admin
-        </button>
-      </div>
-    </div>
-  );
-
-  const renderVoterManagement = () => (
-    <div className="fade-in">
-      <h2>Voter Management</h2>
-
-      <div className="card mb-4">
-        <h3>Registered Voters</h3>
-        <button onClick={handleViewVoters} className="mb-4">
-          Refresh Voter List
-        </button>
-
-        {votersList && votersList.length > 0 ? (
-          <table>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Voter Address</th>
-              </tr>
-            </thead>
-            <tbody>
-              {votersList.map((voter, idx) => (
-                <tr key={idx}>
-                  <td>{idx + 1}</td>
-                  <td>{voter}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p>No voters found.</p>
-        )}
-      </div>
-
-      <div className="card">
-        <h3>Register New Voter</h3>
-        <div className="form-group">
-          <label className="form-label">Voter Address</label>
-          <input
-            type="text"
-            placeholder="0x..."
-            value={newVoter}
-            onChange={(e) => setNewVoter(e.target.value)}
-          />
-        </div>
-        <button onClick={handleRegisterVoter} disabled={!newVoter}>
-          Register Voter
-        </button>
-      </div>
-    </div>
-  );
-
-  const renderElectionManagement = () => (
-    <div className="fade-in">
-      <h2>Election Management</h2>
-
-      <div className="card mb-4">
-        <h3>Create New Election</h3>
-        <div className="form-group">
-          <label className="form-label">Election Name</label>
-          <input
-            type="text"
-            placeholder="Election Name"
-            value={newElectionName}
-            onChange={(e) => setNewElectionName(e.target.value)}
-          />
-        </div>
-        <div className="form-row">
-          <div className="form-col">
-            <label className="form-label">Start Time</label>
-            <input
-              type="datetime-local"
-              value={newElectionStartTime}
-              onChange={(e) => setNewElectionStartTime(e.target.value)}
-            />
-          </div>
-          <div className="form-col">
-            <label className="form-label">End Time</label>
-            <input
-              type="datetime-local"
-              value={newElectionEndTime}
-              onChange={(e) => setNewElectionEndTime(e.target.value)}
-            />
-          </div>
-        </div>
-        <button
-          onClick={handleCreateElection}
-          disabled={
-            !newElectionName || !newElectionStartTime || !newElectionEndTime
-          }
-          className="mt-4"
-        >
-          Create Election
-        </button>
-      </div>
-
-      {selectedElectionId ? (
-        <div className="card">
-          <h3>Update Election: {selectedElectionDetails?.name}</h3>
-          <div className="form-group">
-            <label className="form-label">Election Name</label>
-            <input
-              type="text"
-              value={updateElectionName}
-              onChange={(e) => setUpdateElectionName(e.target.value)}
-            />
-          </div>
-          <div className="form-row">
-            <div className="form-col">
-              <label className="form-label">Start Time</label>
-              <input
-                type="datetime-local"
-                value={updateElectionStartTime}
-                onChange={(e) => setUpdateElectionStartTime(e.target.value)}
-              />
-            </div>
-            <div className="form-col">
-              <label className="form-label">End Time</label>
-              <input
-                type="datetime-local"
-                value={updateElectionEndTime}
-                onChange={(e) => setUpdateElectionEndTime(e.target.value)}
-              />
-            </div>
-          </div>
-          <div className="form-actions">
-            <button onClick={handleUpdateElection}>Update Election</button>
-            <button onClick={handleEndElection} className="btn-secondary">
-              End Election
-            </button>
-            {/* <button
-              onClick={handleDeleteElection}
-              style={{ backgroundColor: "var(--danger)" }}
-            >
-              Delete Election
-            </button> */}
-          </div>
-        </div>
-      ) : (
-        <div className="card">
-          <p>Please select an election from the Dashboard to update it.</p>
-        </div>
-      )}
-    </div>
-  );
-
+  // Replace the renderOfficeCandidateManagement function with this improved version
   const renderOfficeCandidateManagement = () => (
     <div className="fade-in">
       <h2>Office & Candidate Management</h2>
@@ -671,35 +523,74 @@ function AdminDashboard() {
             </button>
           </div>
 
-          <div className="card">
-            <h3>Add Candidate</h3>
-            <div className="form-row">
-              <div className="form-col">
-                <label className="form-label">Office Index</label>
-                <input
-                  type="number"
-                  placeholder="Office Index"
-                  value={officeIndex}
-                  onChange={(e) => setOfficeIndex(e.target.value)}
-                />
+          <div className="card mb-4">
+            <h3>Manage Offices & Candidates</h3>
+
+            {officesList.length > 0 ? (
+              <div className="form-group">
+                <label className="form-label">Select Office</label>
+                <select
+                  value={selectedOfficeIndex}
+                  onChange={(e) => setSelectedOfficeIndex(e.target.value)}
+                  className="mb-4"
+                >
+                  <option value="">-- Select an office --</option>
+                  {officesList.map((office) => (
+                    <option key={office.index} value={office.index}>
+                      {office.name} (Index: {office.index})
+                    </option>
+                  ))}
+                </select>
+
+                {selectedOfficeIndex !== "" && (
+                  <>
+                    <h4 className="mt-4 mb-2">Add Candidate</h4>
+                    <div className="form-group">
+                      <label className="form-label">Candidate Name</label>
+                      <input
+                        type="text"
+                        placeholder="Candidate Name"
+                        value={candidateName}
+                        onChange={(e) => setCandidateName(e.target.value)}
+                      />
+                    </div>
+                    <button
+                      onClick={() => handleAddCandidate()}
+                      disabled={!candidateName}
+                      className="mb-4"
+                    >
+                      Add Candidate
+                    </button>
+
+                    <h4 className="mt-4 mb-2">Current Candidates</h4>
+                    {officeCandidates.length > 0 ? (
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Index</th>
+                            <th>Name</th>
+                            <th>Votes</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {officeCandidates.map((candidate) => (
+                            <tr key={candidate.index}>
+                              <td>{candidate.index}</td>
+                              <td>{candidate.name}</td>
+                              <td>{candidate.voteCount}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <p>No candidates found for this office.</p>
+                    )}
+                  </>
+                )}
               </div>
-              <div className="form-col">
-                <label className="form-label">Candidate Name</label>
-                <input
-                  type="text"
-                  placeholder="Candidate Name"
-                  value={candidateName}
-                  onChange={(e) => setCandidateName(e.target.value)}
-                />
-              </div>
-            </div>
-            <button
-              onClick={handleAddCandidate}
-              disabled={officeIndex === "" || !candidateName}
-              className="mt-4"
-            >
-              Add Candidate
-            </button>
+            ) : (
+              <p>No offices found for this election. Add an office first.</p>
+            )}
           </div>
         </>
       ) : (
@@ -709,6 +600,247 @@ function AdminDashboard() {
       )}
     </div>
   );
+
+  const renderDashboard = () => {
+    return (
+      <div className="fade-in">
+        <h2>Dashboard</h2>
+        <p>Welcome to the admin dashboard!</p>
+        {selectedElectionDetails && (
+          <div className="card">
+            <h3>Selected Election: {selectedElectionDetails.name}</h3>
+            <p>
+              Start Time:{" "}
+              {new Date(
+                selectedElectionDetails.startTime * 1000
+              ).toLocaleString()}
+            </p>
+            <p>
+              End Time:{" "}
+              {new Date(
+                selectedElectionDetails.endTime * 1000
+              ).toLocaleString()}
+            </p>
+          </div>
+        )}
+        <div className="card">
+          <h3>Elections List</h3>
+          {electionsList.length > 0 ? (
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Name</th>
+                  <th>Active</th>
+                  <th>Start Time</th>
+                  <th>End Time</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {electionsList.map((election) => (
+                  <tr key={election.id}>
+                    <td>{election.id}</td>
+                    <td>{election.name}</td>
+                    <td>{election.active ? "Yes" : "No"}</td>
+                    <td>
+                      {new Date(election.startTime * 1000).toLocaleString()}
+                    </td>
+                    <td>
+                      {new Date(election.endTime * 1000).toLocaleString()}
+                    </td>
+                    <td>
+                      <button onClick={() => handleSelectElection(election)}>
+                        Select
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p>No elections found.</p>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderAdminManagement = () => {
+    return (
+      <div className="fade-in">
+        <h2>Admin Management</h2>
+        <div className="card mb-4">
+          <h3>Add New Admin</h3>
+          <div className="form-group">
+            <label className="form-label">Admin Address</label>
+            <input
+              type="text"
+              placeholder="New Admin Address"
+              value={newAdmin}
+              onChange={(e) => setNewAdmin(e.target.value)}
+            />
+          </div>
+          <button onClick={handleAddAdmin} disabled={!newAdmin}>
+            Add Admin
+          </button>
+        </div>
+
+        <div className="card">
+          <h3>Admins List</h3>
+          {adminsList.length > 0 ? (
+            <table>
+              <thead>
+                <tr>
+                  <th>Address</th>
+                </tr>
+              </thead>
+              <tbody>
+                {adminsList.map((admin, index) => (
+                  <tr key={index}>
+                    <td>{admin}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p>No admins found.</p>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderVoterManagement = () => {
+    return (
+      <div className="fade-in">
+        <h2>Voter Management</h2>
+        <div className="card mb-4">
+          <h3>Register New Voter</h3>
+          <div className="form-group">
+            <label className="form-label">Voter Address</label>
+            <input
+              type="text"
+              placeholder="New Voter Address"
+              value={newVoter}
+              onChange={(e) => setNewVoter(e.target.value)}
+            />
+          </div>
+          <button onClick={handleRegisterVoter} disabled={!newVoter}>
+            Register Voter
+          </button>
+        </div>
+
+        <div className="card">
+          <h3>Voters List</h3>
+          {votersList.length > 0 ? (
+            <table>
+              <thead>
+                <tr>
+                  <th>Address</th>
+                </tr>
+              </thead>
+              <tbody>
+                {votersList.map((voter, index) => (
+                  <tr key={index}>
+                    <td>{voter}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p>No voters found.</p>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderElectionManagement = () => {
+    return (
+      <div className="fade-in">
+        <h2>Election Management</h2>
+        <div className="card mb-4">
+          <h3>Create New Election</h3>
+          <div className="form-group">
+            <label className="form-label">Election Name</label>
+            <input
+              type="text"
+              placeholder="Election Name"
+              value={newElectionName}
+              onChange={(e) => setNewElectionName(e.target.value)}
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Start Time</label>
+            <input
+              type="datetime-local"
+              value={newElectionStartTime}
+              onChange={(e) => setNewElectionStartTime(e.target.value)}
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">End Time</label>
+            <input
+              type="datetime-local"
+              value={newElectionEndTime}
+              onChange={(e) => setNewElectionEndTime(e.target.value)}
+            />
+          </div>
+          <button
+            onClick={handleCreateElection}
+            disabled={
+              !newElectionName || !newElectionStartTime || !newElectionEndTime
+            }
+          >
+            Create Election
+          </button>
+        </div>
+
+        {selectedElectionId && (
+          <div className="card mb-4">
+            <h3>Update Election</h3>
+            <div className="form-group">
+              <label className="form-label">Election Name</label>
+              <input
+                type="text"
+                placeholder="Election Name"
+                value={updateElectionName}
+                onChange={(e) => setUpdateElectionName(e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Start Time</label>
+              <input
+                type="datetime-local"
+                value={updateElectionStartTime}
+                onChange={(e) => setUpdateElectionStartTime(e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">End Time</label>
+              <input
+                type="datetime-local"
+                value={updateElectionEndTime}
+                onChange={(e) => setUpdateElectionEndTime(e.target.value)}
+              />
+            </div>
+            <button
+              onClick={handleUpdateElection}
+              disabled={
+                !updateElectionName ||
+                !updateElectionStartTime ||
+                !updateElectionEndTime
+              }
+            >
+              Update Election
+            </button>
+            <button onClick={handleEndElection}>End Election</button>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const renderSection = () => {
     switch (currentSection) {
