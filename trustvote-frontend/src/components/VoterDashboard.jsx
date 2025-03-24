@@ -1,244 +1,297 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { ethers, BrowserProvider } from "ethers"
-import { keccak256, toUtf8Bytes } from "ethers"
-import contractABI from "../abis/VotingSystem.json"
-import { useWeb3Auth } from "../Web3AuthContext"
+import { useState, useEffect } from "react";
+import { ethers, BrowserProvider } from "ethers";
+import { keccak256, toUtf8Bytes } from "ethers";
+import contractABI from "../abis/VotingSystem.json";
+import { useWeb3Auth } from "../Web3AuthContext";
 
-const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS
-const VOTER_ROLE = keccak256(toUtf8Bytes("VOTER_ROLE"))
+const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS;
+const VOTER_ROLE = keccak256(toUtf8Bytes("VOTER_ROLE"));
 
 function VoterDashboard() {
-  const { provider, loggedIn } = useWeb3Auth()
-  const [account, setAccount] = useState(null)
-  const [votingContract, setVotingContract] = useState(null) // writeable instance
-  const [votingContractRead, setVotingContractRead] = useState(null) // read-only instance
-  const [statusMessage, setStatusMessage] = useState("")
-  const [isVoter, setIsVoter] = useState(false)
-  const [currentSection, setCurrentSection] = useState("elections")
-  const [loading, setLoading] = useState(false)
+  const { provider, loggedIn } = useWeb3Auth();
+  const [account, setAccount] = useState(null);
+  const [votingContract, setVotingContract] = useState(null); // writeable instance
+  const [votingContractRead, setVotingContractRead] = useState(null); // read-only instance
+  const [statusMessage, setStatusMessage] = useState("");
+  const [isVoter, setIsVoter] = useState(false);
+  const [currentSection, setCurrentSection] = useState("elections");
+  const [loading, setLoading] = useState(false);
 
   // Elections and selection
-  const [electionsList, setElectionsList] = useState([])
-  const [selectedElectionId, setSelectedElectionId] = useState(null)
-  const [selectedElectionDetails, setSelectedElectionDetails] = useState(null)
-  const [officesList, setOfficesList] = useState([])
-  const [selectedOffice, setSelectedOffice] = useState(null)
-  const [candidatesList, setCandidatesList] = useState([])
-  const [selectedCandidate, setSelectedCandidate] = useState(null)
+  const [electionsList, setElectionsList] = useState([]);
+  const [selectedElectionId, setSelectedElectionId] = useState(null);
+  const [selectedElectionDetails, setSelectedElectionDetails] = useState(null);
+  const [officesList, setOfficesList] = useState([]);
+  const [selectedOffice, setSelectedOffice] = useState(null);
+  const [candidatesList, setCandidatesList] = useState([]);
+  const [selectedCandidate, setSelectedCandidate] = useState(null);
 
   // New state for step-by-step voting
-  const [currentOfficeIndex, setCurrentOfficeIndex] = useState(0)
-  const [votedOffices, setVotedOffices] = useState({})
-  const [votingComplete, setVotingComplete] = useState(false)
+  const [currentOfficeIndex, setCurrentOfficeIndex] = useState(0);
+  const [votedOffices, setVotedOffices] = useState({});
+  const [votingComplete, setVotingComplete] = useState(false);
+  const deploymentBlock = 7959527;
 
   // ----------------- Initialization -----------------
   useEffect(() => {
     const init = async () => {
       if (provider) {
         try {
-          setLoading(true)
+          setLoading(true);
           // Create a BrowserProvider using the Web3Auth provider and chain id (e.g., Sepolia: 11155111)
-          const ethersProvider = new BrowserProvider(provider, 11155111)
-          ethersProvider.skipFetchAccounts = true
+          const ethersProvider = new BrowserProvider(provider, 11155111);
+          ethersProvider.skipFetchAccounts = true;
           // Manually fetch accounts
-          const accounts = await ethersProvider.send("eth_accounts", [])
-          console.log(accounts)
+          const accounts = await ethersProvider.send("eth_accounts", []);
+          console.log(accounts);
           if (accounts.length) {
-            setAccount(accounts[0])
+            setAccount(accounts[0]);
             // Create a read-only contract instance
-            const contractRead = new ethers.Contract(contractAddress, contractABI.abi, ethersProvider)
+            const contractRead = new ethers.Contract(
+              contractAddress,
+              contractABI.abi,
+              ethersProvider
+            );
             // Check if the account has the VOTER_ROLE
-            const voterStatus = await contractRead.hasRole(VOTER_ROLE, accounts[0])
-            setIsVoter(voterStatus)
+            const voterStatus = await contractRead.hasRole(
+              VOTER_ROLE,
+              accounts[0]
+            );
+            setIsVoter(voterStatus);
             // Retrieve private key using the provider's request method (per Web3Auth instructions)
-            const pk = await provider.request({ method: "eth_private_key" })
+            const pk = await provider.request({ method: "eth_private_key" });
             // Create a wallet signer from the private key
-            const walletSigner = new ethers.Wallet(pk, ethersProvider)
+            const walletSigner = new ethers.Wallet(pk, ethersProvider);
             // Create a writeable contract instance by connecting the signer
-            const contractWithSigner = contractRead.connect(walletSigner)
-            setVotingContract(contractWithSigner)
-            setVotingContractRead(contractRead)
+            const contractWithSigner = contractRead.connect(walletSigner);
+            setVotingContract(contractWithSigner);
+            setVotingContractRead(contractRead);
 
             // Load initial data automatically
             // await handleViewElections()
           }
         } catch (error) {
-          console.error("Error initializing voter dashboard:", error)
-          setStatusMessage("Error initializing dashboard")
+          console.error("Error initializing voter dashboard:", error);
+          setStatusMessage("Error initializing dashboard");
         } finally {
-          setLoading(false)
+          setLoading(false);
         }
       }
-    }
-    init()
-  }, [provider])
+    };
+    init();
+  }, [provider]);
 
   useEffect(() => {
     // Only try to fetch if the read contract is set and we’re recognized as a voter
     if (votingContractRead && isVoter) {
-      handleViewElections()
+      handleViewElections();
     }
-  }, [votingContractRead, isVoter])
+  }, [votingContractRead, isVoter]);
 
   // ----------------- Elections List Functions -----------------
   const handleViewElections = async () => {
-    if (!votingContractRead) return
+    if (!votingContractRead) return;
     try {
-      setLoading(true)
-      const countBN = await votingContractRead.electionCount()
-      const electionCount = Number(countBN.toString())
-      const list = []
-      for (let i = 1; i <= electionCount; i++) {
-        const details = await votingContractRead.getElectionDetails(i)
-        // details: [name, active, startTime, endTime, officeCount]
+      setLoading(true);
+      // Query for all ElectionCreated events from the contract
+      const electionEvents = await votingContractRead.queryFilter(
+        "ElectionCreated",
+        deploymentBlock,
+        "latest"
+      );
+      console.log("Fetched election events:", electionEvents);
+
+      // Build a list of elections by processing each ElectionCreated event
+      const list = [];
+      for (const event of electionEvents) {
+        const { electionId, name, startTime, endTime } = event.args;
+        const id = Number(electionId);
+
+        // Query for OfficeAdded events specific to this election
+        const officeAddedFilter = votingContractRead.filters.OfficeAdded(id);
+        const officeEvents = await votingContractRead.queryFilter(
+          officeAddedFilter,
+          deploymentBlock,
+          "latest"
+        );
+
+        // Derive the office count from the number of OfficeAdded events
+        const officeCount = officeEvents.length;
+
+        // Optionally, build an array of office details (e.g., officeIndex and officeName)
+        const offices = officeEvents.map((ev) => ({
+          officeIndex: Number(ev.args.officeIndex),
+          officeName: ev.args.officeName,
+        }));
+
         list.push({
-          id: i,
-          name: details[0],
-          active: details[1],
-          startTime: Number(details[2]),
-          endTime: Number(details[3]),
-          officeCount: Number(details[4]),
-        })
+          id,
+          name,
+          active: true, // Assuming elections are active when created
+          startTime: Number(startTime),
+          endTime: Number(endTime),
+          officeCount,
+          offices, // You can use this array to display office details in your UI
+        });
       }
-      setElectionsList(list)
-      setStatusMessage("Elections fetched successfully")
+
+      // Update state with the list of elections (including office information)
+      setElectionsList(list);
+      setStatusMessage("Elections fetched successfully via events");
     } catch (error) {
-      console.error(error)
-      setStatusMessage("Error fetching elections")
+      console.error("Error fetching elections from events:", error);
+      setStatusMessage("Error fetching elections");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleSelectElection = async (election) => {
-    setSelectedElectionId(election.id)
-    setSelectedElectionDetails(election)
-    setStatusMessage(`Election ${election.id} selected`)
+    setSelectedElectionId(election.id);
+    setSelectedElectionDetails(election);
+    setStatusMessage(`Election ${election.id} selected`);
 
     // Reset voting state
-    setCurrentOfficeIndex(0)
-    setVotedOffices({})
-    setVotingComplete(false)
-    setSelectedOffice(null)
-    setSelectedCandidate(null)
+    setCurrentOfficeIndex(0);
+    setVotedOffices({});
+    setVotingComplete(false);
+    setSelectedOffice(null);
+    setSelectedCandidate(null);
 
     // Load offices for this election
     try {
-      setLoading(true)
+      setLoading(true);
       // Create a filter for the OfficeAdded event for this election
-      const filter = votingContractRead.filters.OfficeAdded(election.id)
+      const filter = votingContractRead.filters.OfficeAdded(election.id);
       // Query past events (you can also set fromBlock if needed)
-      const events = await votingContractRead.queryFilter(filter)
+      const events = await votingContractRead.queryFilter(
+        filter,
+        deploymentBlock,
+        "latest"
+      );
       const offices = events
         .map((event) => ({
           index: Number(event.args.officeIndex),
           name: event.args.officeName,
         }))
-        .sort((a, b) => a.index - b.index)
-      setOfficesList(offices)
+        .sort((a, b) => a.index - b.index);
+      setOfficesList(offices);
 
       // Automatically switch to vote section
-      setCurrentSection("vote")
+      setCurrentSection("vote");
 
       // If there are offices, select the first one
       if (offices.length > 0) {
-        await loadCandidatesForOffice(offices[0])
+        await loadCandidatesForOffice(offices[0]);
       }
     } catch (error) {
-      console.error(error)
-      setStatusMessage("Error loading offices")
+      console.error(error);
+      setStatusMessage("Error loading offices");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const loadCandidatesForOffice = async (office) => {
-    setSelectedOffice(office)
+    setSelectedOffice(office);
 
     // Load candidates for this office
     try {
-      setLoading(true)
-      const candidates = await votingContractRead.getCandidates(selectedElectionId, office.index)
+      setLoading(true);
+      const candidates = await votingContractRead.getCandidates(
+        selectedElectionId,
+        office.index
+      );
       const candidatesList = candidates.map((candidate, index) => ({
         index,
         name: candidate.name,
         voteCount: Number(candidate.voteCount),
-      }))
-      setCandidatesList(candidatesList)
+      }));
+      setCandidatesList(candidatesList);
 
       // If this office has been voted for, pre-select the candidate
       if (votedOffices[office.index] !== undefined) {
-        setSelectedCandidate(votedOffices[office.index])
+        setSelectedCandidate(votedOffices[office.index]);
       } else {
-        setSelectedCandidate(null)
+        setSelectedCandidate(null);
       }
     } catch (error) {
-      console.error(error)
-      setStatusMessage("Error loading candidates")
+      console.error(error);
+      setStatusMessage("Error loading candidates");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   // ----------------- Vote Casting Function -----------------
   const handleCastVote = async () => {
-    if (!votingContract || !selectedElectionId || !selectedOffice || selectedCandidate === null) return
+    if (
+      !votingContract ||
+      !selectedElectionId ||
+      !selectedOffice ||
+      selectedCandidate === null
+    )
+      return;
     try {
-      setLoading(true)
-      const tx = await votingContract.vote(selectedElectionId, selectedOffice.index, selectedCandidate)
-      await tx.wait()
+      setLoading(true);
+      const tx = await votingContract.vote(
+        selectedElectionId,
+        selectedOffice.index,
+        selectedCandidate
+      );
+      await tx.wait();
 
       // Update voted offices
       setVotedOffices((prev) => ({
         ...prev,
         [selectedOffice.index]: selectedCandidate,
-      }))
+      }));
 
-      setStatusMessage(`Vote cast successfully for ${selectedOffice.name}!`)
+      setStatusMessage(`Vote cast successfully for ${selectedOffice.name}!`);
 
       // Move to next office if available
       if (currentOfficeIndex < officesList.length - 1) {
-        const nextIndex = currentOfficeIndex + 1
-        setCurrentOfficeIndex(nextIndex)
-        await loadCandidatesForOffice(officesList[nextIndex])
+        const nextIndex = currentOfficeIndex + 1;
+        setCurrentOfficeIndex(nextIndex);
+        await loadCandidatesForOffice(officesList[nextIndex]);
       } else {
-        setVotingComplete(true)
+        setVotingComplete(true);
       }
     } catch (error) {
-      console.error(error)
-      setStatusMessage("Error casting vote: " + error.message.split(" (")[0])
+      console.error(error);
+      setStatusMessage("Error casting vote: " + error.message.split(" (")[0]);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   // Navigation functions for step-by-step voting
   const goToNextOffice = async () => {
     if (currentOfficeIndex < officesList.length - 1) {
-      const nextIndex = currentOfficeIndex + 1
-      setCurrentOfficeIndex(nextIndex)
-      await loadCandidatesForOffice(officesList[nextIndex])
+      const nextIndex = currentOfficeIndex + 1;
+      setCurrentOfficeIndex(nextIndex);
+      await loadCandidatesForOffice(officesList[nextIndex]);
     } else {
-      setVotingComplete(true)
+      setVotingComplete(true);
     }
-  }
+  };
 
   const goToPreviousOffice = async () => {
     if (currentOfficeIndex > 0) {
-      const prevIndex = currentOfficeIndex - 1
-      setCurrentOfficeIndex(prevIndex)
-      await loadCandidatesForOffice(officesList[prevIndex])
+      const prevIndex = currentOfficeIndex - 1;
+      setCurrentOfficeIndex(prevIndex);
+      await loadCandidatesForOffice(officesList[prevIndex]);
     }
-  }
+  };
 
   const goToOffice = async (index) => {
     if (index >= 0 && index < officesList.length) {
-      setCurrentOfficeIndex(index)
-      await loadCandidatesForOffice(officesList[index])
+      setCurrentOfficeIndex(index);
+      await loadCandidatesForOffice(officesList[index]);
     }
-  }
+  };
 
   // ----------------- Render Sections -----------------
   const renderElections = () => (
@@ -255,16 +308,24 @@ function VoterDashboard() {
               <div className="election-card-header">
                 <div className="election-card-title">{election.name}</div>
                 <span
-                  className={`election-card-status ${election.active && Date.now() / 1000 <= election.endTime ? "active" : "inactive"}`}
+                  className={`election-card-status ${
+                    election.active && Date.now() / 1000 <= election.endTime
+                      ? "active"
+                      : "inactive"
+                  }`}
                 >
-                  {election.active && Date.now() / 1000 <= election.endTime ? "Active" : "Inactive"}
+                  {election.active && Date.now() / 1000 <= election.endTime
+                    ? "Active"
+                    : "Inactive"}
                 </span>
               </div>
               <div className="election-card-body">
                 <div className="election-card-info">
                   <div className="election-card-info-item">
                     <span className="election-card-info-label">ID:</span>
-                    <span className="election-card-info-value">{election.id}</span>
+                    <span className="election-card-info-value">
+                      {election.id}
+                    </span>
                   </div>
                   <div className="election-card-info-item">
                     <span className="election-card-info-label">Start:</span>
@@ -280,16 +341,22 @@ function VoterDashboard() {
                   </div>
                   <div className="election-card-info-item">
                     <span className="election-card-info-label">Offices:</span>
-                    <span className="election-card-info-value">{election.officeCount}</span>
+                    <span className="election-card-info-value">
+                      {election.officeCount}
+                    </span>
                   </div>
                 </div>
               </div>
               <div className="election-card-footer">
                 <button
                   onClick={() => handleSelectElection(election)}
-                  disabled={!election.active || Date.now() / 1000 > election.endTime}
+                  disabled={
+                    !election.active || Date.now() / 1000 > election.endTime
+                  }
                 >
-                  {election.active && Date.now() / 1000 <= election.endTime ? "Select" : "Ended"}
+                  {election.active && Date.now() / 1000 <= election.endTime
+                    ? "Select"
+                    : "Ended"}
                 </button>
               </div>
             </div>
@@ -301,7 +368,7 @@ function VoterDashboard() {
         </div>
       )}
     </div>
-  )
+  );
 
   const renderVote = () => (
     <div className="fade-in">
@@ -310,7 +377,10 @@ function VoterDashboard() {
       {selectedElectionId ? (
         <div className="card">
           <h3>{selectedElectionDetails?.name}</h3>
-          <p>Election ends: {new Date(selectedElectionDetails?.endTime * 1000).toLocaleString()}</p>
+          <p>
+            Election ends:{" "}
+            {new Date(selectedElectionDetails?.endTime * 1000).toLocaleString()}
+          </p>
 
           {officesList.length > 0 ? (
             <div className="voting-interface">
@@ -319,7 +389,11 @@ function VoterDashboard() {
                 {officesList.map((office, index) => (
                   <button
                     key={office.index}
-                    className={`progress-step ${index === currentOfficeIndex ? "active" : ""} ${votedOffices[office.index] !== undefined ? "voted" : ""}`}
+                    className={`progress-step ${
+                      index === currentOfficeIndex ? "active" : ""
+                    } ${
+                      votedOffices[office.index] !== undefined ? "voted" : ""
+                    }`}
                     onClick={() => goToOffice(index)}
                   >
                     {index + 1}
@@ -356,7 +430,10 @@ function VoterDashboard() {
                     </div>
                     <h3>Voting Complete!</h3>
                     <p>Thank you for casting your votes in this election.</p>
-                    <button className="btn-primary" onClick={() => setCurrentSection("elections")}>
+                    <button
+                      className="btn-primary"
+                      onClick={() => setCurrentSection("elections")}
+                    >
                       Return to Elections
                     </button>
                   </div>
@@ -367,11 +444,19 @@ function VoterDashboard() {
                         candidatesList.map((candidate) => (
                           <div
                             key={candidate.index}
-                            className={`candidate-option ${selectedCandidate === candidate.index ? "selected" : ""}`}
-                            onClick={() => setSelectedCandidate(candidate.index)}
+                            className={`candidate-option ${
+                              selectedCandidate === candidate.index
+                                ? "selected"
+                                : ""
+                            }`}
+                            onClick={() =>
+                              setSelectedCandidate(candidate.index)
+                            }
                           >
                             <div className="candidate-option-header">
-                              <span className="candidate-option-name">{candidate.name}</span>
+                              <span className="candidate-option-name">
+                                {candidate.name}
+                              </span>
                               {selectedCandidate === candidate.index && (
                                 <svg
                                   xmlns="http://www.w3.org/2000/svg"
@@ -405,9 +490,16 @@ function VoterDashboard() {
                       </button>
 
                       <div className="voting-actions">
-                        {votedOffices[officesList[currentOfficeIndex]?.index] !== undefined ? (
-                          <button onClick={goToNextOffice} className="btn-primary">
-                            {currentOfficeIndex === officesList.length - 1 ? "Finish" : "Next"}
+                        {votedOffices[
+                          officesList[currentOfficeIndex]?.index
+                        ] !== undefined ? (
+                          <button
+                            onClick={goToNextOffice}
+                            className="btn-primary"
+                          >
+                            {currentOfficeIndex === officesList.length - 1
+                              ? "Finish"
+                              : "Next"}
                           </button>
                         ) : (
                           <button
@@ -434,14 +526,14 @@ function VoterDashboard() {
         </div>
       )}
     </div>
-  )
+  );
 
   if (loading && !account) {
     return (
       <div className="loading-overlay">
         <div className="loading-spinner"></div>
       </div>
-    )
+    );
   }
 
   if (!loggedIn) {
@@ -452,7 +544,7 @@ function VoterDashboard() {
           <p>Please log in to access the voter dashboard.</p>
         </div>
       </div>
-    )
+    );
   }
 
   if (!isVoter) {
@@ -460,10 +552,13 @@ function VoterDashboard() {
       <div className="container">
         <div className="card text-center">
           <h2>Access Denied</h2>
-          <p>You are not a registered voter. Please contact an administrator to register.</p>
+          <p>
+            You are not a registered voter. Please contact an administrator to
+            register.
+          </p>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -474,11 +569,13 @@ function VoterDashboard() {
           <li className="sidebar-nav-item">
             <a
               href="#"
-              className={`sidebar-nav-link ${currentSection === "elections" ? "active" : ""}`}
+              className={`sidebar-nav-link ${
+                currentSection === "elections" ? "active" : ""
+              }`}
               onClick={(e) => {
-                e.preventDefault()
-                setCurrentSection("elections")
-                handleViewElections()
+                e.preventDefault();
+                setCurrentSection("elections");
+                handleViewElections();
               }}
             >
               Available Elections
@@ -487,10 +584,12 @@ function VoterDashboard() {
           <li className="sidebar-nav-item">
             <a
               href="#"
-              className={`sidebar-nav-link ${currentSection === "vote" ? "active" : ""}`}
+              className={`sidebar-nav-link ${
+                currentSection === "vote" ? "active" : ""
+              }`}
               onClick={(e) => {
-                e.preventDefault()
-                setCurrentSection("vote")
+                e.preventDefault();
+                setCurrentSection("vote");
               }}
             >
               Cast Vote
@@ -518,8 +617,7 @@ function VoterDashboard() {
         )}
       </div>
     </div>
-  )
+  );
 }
 
-export default VoterDashboard
-
+export default VoterDashboard;
