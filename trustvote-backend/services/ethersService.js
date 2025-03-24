@@ -15,7 +15,7 @@ const votingSystemAbi = [
 const votingSystemContract = new ethers.Contract(votingSystemAddress, votingSystemAbi, fundingWallet);
 
 // Define the fund amount (0.05 ether)
-const FUND_AMOUNT = ethers.parseEther("0.001");
+const FUND_AMOUNT = ethers.parseEther("0.05");
 
 /**
  * Sends funds to the specified wallet address.
