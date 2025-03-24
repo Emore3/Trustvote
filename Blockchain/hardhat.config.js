@@ -1,5 +1,6 @@
 require("@nomicfoundation/hardhat-toolbox");
 require('dotenv').config();
+require("@nomicfoundation/hardhat-verify");
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
@@ -14,6 +15,11 @@ module.exports = {
     sepolia: {
       url: process.env.VITE_RPC_TARGET,
       accounts: [process.env.ACCOUNT_PRIV_KEY],
+    },
+  },
+  etherscan: {
+    apiKey: {
+      sepolia: process.env.ETHERSCAN_API_KEY,
     },
   },
   paths: {

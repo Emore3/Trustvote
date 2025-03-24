@@ -1,4 +1,5 @@
 "use client";
+import toast from "react-hot-toast";
 
 import { useState, useEffect } from "react";
 import { ethers, BrowserProvider } from "ethers";
@@ -90,6 +91,14 @@ function VoterDashboard() {
     }
   }, [votingContractRead, isVoter]);
 
+  const handleSuccess = (message) => {
+    toast.success(message);
+  };
+
+  const handleError = (message) => {
+    toast.error(message);
+  };
+
   // ----------------- Elections List Functions -----------------
   const handleViewElections = async () => {
     if (!votingContractRead) return;
@@ -140,9 +149,11 @@ function VoterDashboard() {
       // Update state with the list of elections (including office information)
       setElectionsList(list);
       setStatusMessage("Elections fetched successfully via events");
+      {handleSuccess("Elections fetched successfully")}
     } catch (error) {
       console.error("Error fetching elections from events:", error);
       setStatusMessage("Error fetching elections");
+      {handleError("Error fetching elections")}
     } finally {
       setLoading(false);
     }
@@ -189,6 +200,7 @@ function VoterDashboard() {
     } catch (error) {
       console.error(error);
       setStatusMessage("Error loading offices");
+      {handleError("Error loading offices")}
     } finally {
       setLoading(false);
     }
@@ -220,6 +232,7 @@ function VoterDashboard() {
     } catch (error) {
       console.error(error);
       setStatusMessage("Error loading candidates");
+      {handleError("Error loading candidates")}
     } finally {
       setLoading(false);
     }
@@ -250,6 +263,7 @@ function VoterDashboard() {
       }));
 
       setStatusMessage(`Vote cast successfully for ${selectedOffice.name}!`);
+      {handleSuccess(`Vote cast successfully for ${selectedOffice.name}!`)}
 
       // Move to next office if available
       if (currentOfficeIndex < officesList.length - 1) {
@@ -262,6 +276,7 @@ function VoterDashboard() {
     } catch (error) {
       console.error(error);
       setStatusMessage("Error casting vote: " + error.message.split(" (")[0]);
+      {handleError("Error casting vote: " + error.message.split(" (")[0])}
     } finally {
       setLoading(false);
     }

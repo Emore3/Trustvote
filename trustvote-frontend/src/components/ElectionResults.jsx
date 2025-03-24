@@ -1,5 +1,7 @@
 "use client";
 
+import toast from "react-hot-toast";
+
 import { useState, useEffect, useRef } from "react";
 import { ethers, BrowserProvider } from "ethers";
 import contractABI from "../abis/VotingSystem.json";
@@ -46,6 +48,7 @@ function ElectionResults() {
         } catch (error) {
           console.error("Error initializing election results page:", error);
           setStatusMessage("Error initializing page");
+          {handleError("Error initializing page")}
         } finally {
           setLoading(false);
         }
@@ -59,6 +62,14 @@ function ElectionResults() {
       handleViewElections();
     }
   }, [votingContractRead]);
+
+  const handleSuccess = (message) => {
+    toast.success(message);
+  };
+
+  const handleError = (message) => {
+    toast.error(message);
+  };
 
   // Set up an event listener for real-time updates
   // useEffect(() => {
@@ -139,9 +150,11 @@ function ElectionResults() {
       // Update state with the list of elections (including office information)
       setElectionsList(list);
       setStatusMessage("Elections fetched successfully via events");
+      {handleSuccess("Elections fetched successfully")}
     } catch (error) {
       console.error("Error fetching elections from events:", error);
       setStatusMessage("Error fetching elections");
+      {handleError("Error fetching elections")}
     } finally {
       setLoading(false);
     }
@@ -248,6 +261,7 @@ function ElectionResults() {
 
       setOfficeResults(offices);
       setStatusMessage(`Results for election ${election.id} loaded`);
+      {handleSuccess(`Results for election ${election.id} loaded`)}
 
       // Scroll to results after they're loaded.
       setTimeout(() => {
@@ -258,6 +272,7 @@ function ElectionResults() {
     } catch (error) {
       console.error("Error loading election results from events:", error);
       setStatusMessage("Error loading election results");
+      {handleError("Error loading election results")}
     } finally {
       setLoading(false);
     }

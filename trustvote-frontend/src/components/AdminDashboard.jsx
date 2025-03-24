@@ -1,5 +1,7 @@
 "use client";
 
+import toast from "react-hot-toast";
+
 import { useState, useEffect } from "react";
 import { ethers, BrowserProvider } from "ethers";
 import { keccak256, toUtf8Bytes } from "ethers";
@@ -97,6 +99,7 @@ function AdminDashboard() {
         } catch (error) {
           console.error("Error initializing admin dashboard:", error);
           setStatusMessage("Error initializing dashboard");
+          {handleError("Error initializing dashboard")}
         } finally {
           setLoading(false);
         }
@@ -121,6 +124,14 @@ function AdminDashboard() {
       loadCandidatesForOffice(selectedOfficeIndex);
     }
   }, [selectedOfficeIndex]);
+
+  const handleSuccess = (message) => {
+    toast.success(message);
+  };
+
+  const handleError = (message) => {
+    toast.error(message);
+  };
 
   // ----------------- Elections List Functions -----------------
   const handleViewElections = async () => {
@@ -172,9 +183,11 @@ function AdminDashboard() {
       // Update state with the list of elections (including office information)
       setElectionsList(list);
       setStatusMessage("Elections fetched successfully via events");
+      {handleSuccess("Elections fetched successfully")}
     } catch (error) {
       console.error("Error fetching elections from events:", error);
       setStatusMessage("Error fetching elections");
+      {handleError("Error fetching elections")}
     } finally {
       setLoading(false);
     }
@@ -206,6 +219,7 @@ function AdminDashboard() {
     } catch (error) {
       console.error("Error loading offices:", error);
       setStatusMessage("Error loading offices");
+      {handleError("Error loading offices")}
     } finally {
       setLoading(false);
     }
@@ -272,6 +286,7 @@ function AdminDashboard() {
     } catch (error) {
       console.error("Error loading candidates from events:", error);
       setStatusMessage("Error loading candidates");
+      {handleError("Error loading candidates")}
     } finally {
       setLoading(false);
     }
@@ -304,11 +319,13 @@ function AdminDashboard() {
       const tx = await votingContract.addAdmin(newAdmin);
       await tx.wait();
       setStatusMessage("Admin added successfully");
+      {handleSuccess("Admin added successfully")}
       setNewAdmin("");
       handleViewAdmins();
     } catch (error) {
       console.error(error);
       setStatusMessage("Error adding admin");
+      {handleError("Error adding admin")}
     } finally {
       setLoading(false);
     }
@@ -321,9 +338,11 @@ function AdminDashboard() {
       const admins = await votingContractRead.viewAdmins();
       setAdminsList(admins);
       setStatusMessage("Admins fetched successfully");
+      {handleSuccess("Admins fetched successfully")}
     } catch (error) {
       console.error(error);
       setStatusMessage("Error fetching admins");
+      {handleError("Error fetching admins")}
     } finally {
       setLoading(false);
     }
@@ -337,11 +356,13 @@ function AdminDashboard() {
       const tx = await votingContract.registerVoter(newVoter);
       await tx.wait();
       setStatusMessage("Voter registered successfully");
+      {handleSuccess("Voter registered successfully")}
       setNewVoter("");
       handleViewVoters();
     } catch (error) {
       console.error(error);
       setStatusMessage("Error registering voter");
+      {handleError("Error registering voter")}
     } finally {
       setLoading(false);
     }
@@ -354,9 +375,11 @@ function AdminDashboard() {
       const voters = await votingContractRead.viewVoters();
       setVotersList(voters);
       setStatusMessage("Voters fetched successfully");
+      {handleSuccess("Voters fetched successfully")}
     } catch (error) {
       console.error(error);
       setStatusMessage("Error fetching voters");
+      {handleError("Error fetching voters")}
     } finally {
       setLoading(false);
     }
@@ -377,6 +400,7 @@ function AdminDashboard() {
       );
       await tx.wait();
       setStatusMessage("Election created successfully");
+      {handleSuccess("Election created successfully")}
       setNewElectionName("");
       setNewElectionStartTime("");
       setNewElectionEndTime("");
@@ -384,6 +408,7 @@ function AdminDashboard() {
     } catch (error) {
       console.error(error);
       setStatusMessage("Error creating election");
+      {handleError("Error creating election")}
     } finally {
       setLoading(false);
     }
@@ -406,10 +431,12 @@ function AdminDashboard() {
       );
       await tx.wait();
       setStatusMessage("Election updated successfully");
+      {handleSuccess("Election updated successfully")}
       handleViewElections();
     } catch (error) {
       console.error(error);
       setStatusMessage("Error updating election");
+      {handleError("Error updating election")}
     } finally {
       setLoading(false);
     }
@@ -440,10 +467,12 @@ function AdminDashboard() {
       const tx = await votingContract.endElection(selectedElectionId);
       await tx.wait();
       setStatusMessage("Election ended successfully");
+      {handleSuccess("Election ended successfully")}
       handleViewElections();
     } catch (error) {
       console.error(error);
       setStatusMessage("Error ending election");
+      {handleError("Error ending election")}
     } finally {
       setLoading(false);
     }
@@ -457,12 +486,14 @@ function AdminDashboard() {
       const tx = await votingContract.addOffice(selectedElectionId, officeName);
       await tx.wait();
       setStatusMessage(`Office "${officeName}" added successfully`);
+      {handleSuccess(`Office "${officeName}" added successfully`)}
       setOfficeName("");
       // Refresh the offices list
       await loadOfficesForElection(selectedElectionId);
     } catch (error) {
       console.error(error);
       setStatusMessage("Error adding office: " + error.message.split(" (")[0]);
+      {handleError("Error adding office: " + error.message.split(" (")[0])}
     } finally {
       setLoading(false);
     }
@@ -487,6 +518,7 @@ function AdminDashboard() {
       setStatusMessage(
         `Candidate "${candidateName}" added successfully to office index ${selectedOfficeIndex}`
       );
+      {handleSuccess(`Candidate "${candidateName}" added successfully to office index ${selectedOfficeIndex}`)}
       setCandidateName("");
       // Refresh the candidates list
       loadCandidatesForOffice(selectedOfficeIndex);
@@ -495,6 +527,7 @@ function AdminDashboard() {
       setStatusMessage(
         "Error adding candidate: " + error.message.split(" (")[0]
       );
+      {handleError("Error adding candidate: " + error.message.split(" (")[0])}
     } finally {
       setLoading(false);
     }
@@ -642,7 +675,11 @@ function AdminDashboard() {
                   <tr key={election.id}>
                     <td>{election.id}</td>
                     <td>{election.name}</td>
-                    <td>{election.active ? "Yes" : "No"}</td>
+                    <td>
+                      {election.active && Date.now() / 1000 <= election.endTime
+                        ? "Yes"
+                        : "No"}
+                    </td>
                     <td>
                       {new Date(election.startTime * 1000).toLocaleString()}
                     </td>
