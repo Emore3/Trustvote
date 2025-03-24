@@ -81,6 +81,7 @@ export const Web3AuthProvider = ({ children }) => {
           }
         } catch (error){
           console.log("Pellumi Error: ", error)
+          logout()
         }
       }
     } catch (error) {
